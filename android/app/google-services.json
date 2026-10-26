@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1015672797088-52q6u5l19qmpn37da67cqk833mr36c4c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.andrey.talantfoxes",
+            "certificate_hash": "b7b096174cab79e883706c2221951cb3cc499213"
+          }
+        },
+        {
           "client_id": "1015672797088-gcfvrle8dn3soqts63v1gp8ui94191ej.apps.googleusercontent.com",
           "client_type": 3
         }
