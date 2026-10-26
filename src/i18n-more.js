@@ -23,5 +23,13 @@ export const EN_MORE = {
   "Легко": "Easy", "Обычно": "Normal", "Тяжело": "Hard", "Неприятно": "Unpleasant",
   "Подсказать звёзды по минутам и сложности": "Suggest stars from minutes and difficulty", "Укажите, сколько минут занимает задание": "Enter how many minutes the task takes", "Подходит: {n} ★": "Suggested: {n} ★",
   "Размер впечатления": "Size of the treat", "Своя цена": "Custom price",
-  "≈ 1 дня заработка": "≈ 1 day of earnings", "≈ {n} дн. заработка": "≈ {n} days of earnings", "дешевле одного дня": "cheaper than a day", "очень дорого": "very expensive"
+  "≈ 1 дня заработка": "≈ 1 day of earnings", "≈ {n} дн. заработка": "≈ {n} days of earnings", "дешевле одного дня": "cheaper than a day", "очень дорого": "very expensive",
+  "Бонус сразу попадает на счёт ребёнка, без подтверждения. Например, за уборку без напоминания.": "A bonus goes to your child's balance straight away, with no confirmation. For example, for tidying up without being asked.",
+  "За что? (необязательно)": "What for? (optional)", "За что бонус": "Reason for the bonus", "Выдать +{n} ★ ({name})": "Give +{n} ★ ({name})",
+  "Бонус +{n} ★ выдан: {name}": "Bonus +{n} ★ given to {name}", "Отменить": "Undo", "Бонус отменён": "Bonus undone",
+  "Это примерно {n} мин усилий в день": "That is about {n} min of effort a day", "≈ {n} мин": "≈ {n} min", "разовое": "one-time", "разовое, выполнено": "one-time, done", "каждый день": "every day",
+  "Как часто": "How often", "Каждый день": "Every day", "Разовое": "One-time",
+  "Звёзды считаются сами по минутам и сложности. Их можно поправить вручную.": "Stars are worked out from minutes and difficulty. You can change them by hand.",
+  "{m} мин, это {n} ★ (1 ★ = {c} мин)": "{m} min is {n} ★ (1 ★ = {c} min)",
+  "Настройки": "Settings", "Язык": "Language", "Тема": "Theme", "Как в системе": "Same as system", "Светлая": "Light", "Тёмная": "Dark", "Аккаунт": "Account", "Выйти из аккаунта": "Sign out"
 };

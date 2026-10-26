@@ -45,15 +45,16 @@ const MUSIC_HOSTS = {
   yandex: h => /^music\.yandex\.(ru|com|kz|by|uz)$/.test(h)
 };
 
+// repeat: "daily" comes back every day after it is done; "once" disappears for good once approved
 export const defaultTasks = () => [
-  { id: "m1", title: "Танец под 3 песни", kind: "move", stars: 3, icon: "💃" },
-  { id: "m2", title: "20 приседаний", kind: "move", stars: 2, icon: "🏋️" },
-  { id: "m3", title: "Прогулка 20 минут", kind: "move", stars: 3, icon: "🚶" },
-  { id: "m4", title: "Скакалка 100 прыжков", kind: "move", stars: 3, icon: "🪢" },
-  { id: "c1", title: "Заправить кровать", kind: "clean", stars: 1, icon: "🛏️" },
-  { id: "c2", title: "Собрать всё с пола", kind: "clean", stars: 2, icon: "🧦" },
-  { id: "c3", title: "Разложить 5 вещей по местам", kind: "clean", stars: 2, icon: "📚" },
-  { id: "c4", title: "Полная уборка комнаты", kind: "clean", stars: 5, icon: "✨" }
+  { id: "m1", title: "Танец под 3 песни", kind: "move", stars: 3, icon: "💃", minutes: 12, repeat: "daily" },
+  { id: "m2", title: "20 приседаний", kind: "move", stars: 2, icon: "🏋️", minutes: 5, repeat: "daily" },
+  { id: "m3", title: "Прогулка 20 минут", kind: "move", stars: 3, icon: "🚶", minutes: 20, repeat: "daily" },
+  { id: "m4", title: "Скакалка 100 прыжков", kind: "move", stars: 3, icon: "🪢", minutes: 10, repeat: "daily" },
+  { id: "c1", title: "Заправить кровать", kind: "clean", stars: 1, icon: "🛏️", minutes: 2, repeat: "daily" },
+  { id: "c2", title: "Собрать всё с пола", kind: "clean", stars: 2, icon: "🧦", minutes: 5, repeat: "daily" },
+  { id: "c3", title: "Разложить 5 вещей по местам", kind: "clean", stars: 2, icon: "📚", minutes: 8, repeat: "daily" },
+  { id: "c4", title: "Полная уборка комнаты", kind: "clean", stars: 5, icon: "✨", minutes: 40, repeat: "daily" }
 ];
 export const defaultRewards = () => [
   { id: "r1", title: "Выбрать фильм на вечер", cost: 15, icon: "🎬" }, { id: "r2", title: "+30 минут игр", cost: 20, icon: "🎮" },
@@ -82,7 +83,15 @@ export function derive(doc, log, orders) {
   });
 }
 export const entries = k => k.log.filter(l => l.day === today());
-export function statusOf(k, taskId) { const e = entries(k).filter(l => l.taskId === taskId).sort((a, b) => a.ts - b.ts).pop(); return e ? e.status : null; }
+// Daily tasks look at today's entries only, so they are active again the next day.
+// One-time tasks look at the whole history: once approved they stay done, a pending one stays pending.
+export function statusOf(k, taskId, repeat = "daily") {
+  const all = repeat === "once" ? k.log.filter(l => l.taskId === taskId) : entries(k).filter(l => l.taskId === taskId);
+  if (repeat === "once" && all.some(l => l.status === "done")) return "done";
+  const e = all.sort((a, b) => a.ts - b.ts).pop();
+  return e ? e.status : null;
+}
+export const isOnceDone = (k, tk) => tk.repeat === "once" && statusOf(k, tk.id, "once") === "done";
 export const doneToday = (k, kind) => entries(k).filter(l => l.status === "done" && l.kind === kind).length;
 export function mood(k) {
   if (doneToday(k, "move") + doneToday(k, "clean") >= 2) return "happy";
@@ -149,6 +158,7 @@ export function typicalStars(k) {
   if (!a.length) return 2;
   return a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2;
 }
+export const dailyMinutes = k => dailyStars(k) * k.economy.minutesPerStar;
 export const dailyStars = k => k.economy.tasksPerDay * typicalStars(k) * SUCCESS_RATE;
 export const roundTidy = n => n < 20 ? Math.max(1, Math.round(n)) : Math.round(n / 5) * 5;
 export const tierPrice = (k, tier) => roundTidy(dailyStars(k) * tier.days);

@@ -200,3 +200,6 @@ label.muted { margin-bottom: -6px; }
 .rung { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .rung:first-child { border-top: 0; }
 .flag { color: var(--bad); font-weight: 800; }
+
+.once { color: var(--accent); }
+.formrow .hint { align-self: center; }

@@ -2,13 +2,14 @@ import "./styles.css";
 import { t, tf, getLang, toggleLang } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteLog, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars } from "./domain.js";
 
 const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
-const ui = { welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const THEME_KEY = "talent-foxes-theme";
+const ui = { settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -35,6 +36,13 @@ async function run(fn, okMsg) {
   ui.busy = false; render();
 }
 
+// ---------- theme ----------
+function applyTheme() {
+  const r = document.documentElement;
+  if (ui.theme === "light" || ui.theme === "dark") r.setAttribute("data-theme", ui.theme); else r.removeAttribute("data-theme");
+}
+applyTheme();
+
 // ---------- accent ----------
 function applyAccent(k) {
   const a = ACCENTS.find(x => x.id === (k ? k.accent : "violet")) || ACCENTS[0], root = document.documentElement, th = root.getAttribute("data-theme");
@@ -49,8 +57,9 @@ const parentKid = id => S.kids.find(x => x.id === id);
 function render() {
   const role = S.role, k = role === "kid" ? myKid() : null;
   applyAccent(k);
-  $("#langBtn").textContent = getLang() === "ru" ? "RU" : "EN";
-  $("#outBtn").hidden = !S.user; $("#outBtn").textContent = t("Выйти");
+  $("#setBtn").textContent = "⚙ " + t("Настройки");
+  const sh = $("#sheet"); sh.hidden = !ui.settings; if (ui.settings) sh.innerHTML = V.vSettings(S, ui);
+  document.body.style.overflow = ui.settings ? "hidden" : "";
   $("#whoChip").hidden = !S.user;
   $("#whoChip").textContent = role === "kid" ? (k ? k.name : "") : (S.family ? S.family.name : "");
   $("#hdrStars").hidden = !k; if (k) $("#hdrStars").innerHTML = V.STAR + "<span>" + k.stars + "</span>";
@@ -96,8 +105,11 @@ function equipList(k, id) {
   return eq.includes(id) ? eq.filter(x => x !== id) : eq.filter(x => ACCESSORIES.find(y => y.id === x).slot !== a.slot).concat(id);
 }
 const A = {
-  lang() { toggleLang(); render(); },
-  signout() { ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
+  openSettings() { ui.settings = true; render(); },
+  closeSettings() { ui.settings = false; render(); },
+  setLang(id) { if (getLang() !== id) toggleLang(); render(); },
+  setTheme(id) { ui.theme = id; LS.set(THEME_KEY, id); applyTheme(); render(); },
+  signout() { ui.settings = false; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
   welcomeKid() { ui.welcome = "kid"; ui.err = ""; render(); },
   welcomeBack() { ui.welcome = "choose"; ui.err = ""; render(); },
   parentLogin() { run(() => parentSignIn()); },
@@ -137,17 +149,19 @@ const A = {
   logNo(id, el) { const k = parentKid(el.dataset.kid), l = k && k.log.find(x => x.id === id); if (l) decideLog(k, l, false).catch(fail); },
   orderOk(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "given").catch(fail); },
   orderNo(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "refused").catch(fail); },
-  bonus(n) { const k = parentKid(ui.pk); if (k) giveBonus(k, +n).then(() => toast(t("Бонус отправлен"))).catch(fail); },
+  bonusPick(n) { ui.bonusN = +n; render(); },
+  bonusGive() {
+    const k = parentKid(ui.pk); if (!k) return; const why = val("bonusWhy").trim().slice(0, 60), n = ui.bonusN;
+    giveBonus(k, n, why).then(() => { const el = $("#bonusWhy"); if (el) el.value = ""; toast(tf("Бонус +{n} ★ выдан: {name}", { n, name: k.name })); }).catch(fail);
+  },
+  bonusUndo(id) { const k = parentKid(ui.pk), l = k && k.log.find(x => x.id === id); if (l) deleteLog(k, l).then(() => toast(t("Бонус отменён"))).catch(fail); },
   econTasks(n) { const k = parentKid(ui.pk); if (k) saveEconomy(k, Object.assign({}, k.economy, { tasksPerDay: +n })).catch(fail); },
   econMinutes(n) { const k = parentKid(ui.pk); if (k) saveEconomy(k, Object.assign({}, k.economy, { minutesPerStar: +n })).catch(fail); },
-  suggestStars() {
-    const k = parentKid(ui.pk), m = +val("ntMin"); if (!k) return;
-    if (!m || m < 1) return toast(t("Укажите, сколько минут занимает задание"));
-    const n = taskStars(k, m, val("ntHard")); $("#ntStars").value = n; toast(tf("Подходит: {n} ★", { n }));
-  },
   addTask() {
-    const k = parentKid(ui.pk), v = val("ntTitle").trim(); if (!k || !v) return; const kind = val("ntKind");
-    saveTasks(k, k.tasks.concat([{ id: uid(), title: v, kind, stars: Math.max(1, Math.min(10, +val("ntStars") || 1)), icon: kind === "move" ? "🏃" : "🧹" }])).then(() => { const el = $("#ntTitle"); if (el) el.value = ""; }).catch(fail);
+    const k = parentKid(ui.pk), v = val("ntTitle").trim(); if (!k || !v) return; const kind = val("ntKind"), min = +val("ntMin") || 0;
+    const task = { id: uid(), title: v, kind, stars: Math.max(1, Math.min(10, +val("ntStars") || 1)), icon: kind === "move" ? "🏃" : "🧹", repeat: val("ntRepeat") === "once" ? "once" : "daily" };
+    if (min > 0) task.minutes = Math.min(120, Math.round(min));
+    saveTasks(k, k.tasks.concat([task])).then(() => { ["ntTitle", "ntMin"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); }).catch(fail);
   },
   delTask(id) { const k = parentKid(ui.pk); if (k) saveTasks(k, k.tasks.filter(x => x.id !== id)).catch(fail); },
   addReward() {
@@ -171,7 +185,15 @@ document.addEventListener("click", e => {
   const el = e.target.closest("[data-act]"); if (!el) return;
   const fn = A[el.dataset.act]; if (fn) fn(el.dataset.id, el);
 });
+// stars follow minutes and difficulty as the parent types; the stars field stays editable
+function recalcStars() {
+  const k = parentKid(ui.pk), m = +val("ntMin"), hint = $("#ntHint"); if (!k || !$("#ntStars")) return;
+  if (m > 0) { const n = taskStars(k, m, val("ntHard")); $("#ntStars").value = n; if (hint) hint.textContent = tf("{m} мин, это {n} ★ (1 ★ = {c} мин)", { m, n, c: k.economy.minutesPerStar }); }
+  else if (hint) hint.textContent = t("Звёзды считаются сами по минутам и сложности. Их можно поправить вручную.");
+}
+document.addEventListener("input", e => { if (e.target.id === "ntMin") recalcStars(); });
 document.addEventListener("change", e => {
+  if (e.target.id === "ntHard") recalcStars();
   const tg = e.target;
   if (tg.id === "petName") { const k = myKid(); savePet(k, Object.assign({}, k.pet, { name: tg.value.trim().slice(0, 14) || "Рыжик" })).catch(fail); }
   else if (tg.id === "nrTier") { if (tg.value) { const c = $("#nrCost"); if (c) c.value = tg.value; } }

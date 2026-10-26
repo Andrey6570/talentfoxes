@@ -1,7 +1,7 @@
 import { t, tf, pl, disp, getLang } from "./i18n.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
-import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
+import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, isOnceDone, dailyMinutes, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
 
 import { esc } from "./util.js";
 export { esc };
@@ -48,10 +48,10 @@ export function vFamilySetup(M, ui) {
 
 // ---------- child ----------
 function taskCard(k, tk) {
-  const st = statusOf(k, tk.id);
+  const st = statusOf(k, tk.id, tk.repeat);
   const right = st === "done" ? `<div class="state ok">${t("Засчитано")}</div>` : st === "pending" ? `<div class="state wait">${t("Ждёт проверки")}</div>`
     : `<button class="btn small" data-act="submit" data-id="${esc(tk.id)}">${st === "rejected" ? t("Ещё раз") : t("Сделано!")}</button>`;
-  return `<div class="task ${tk.kind}"><div class="ic">${esc(tk.icon || "⭐")}</div><div class="grow"><div class="t">${esc(disp(tk.title))}</div><span class="reward-line">${STAR}+${tk.stars}</span></div>${right}</div>`;
+  return `<div class="task ${tk.kind}"><div class="ic">${esc(tk.icon || "⭐")}</div><div class="grow"><div class="t">${esc(disp(tk.title))}</div><span class="reward-line">${STAR}+${tk.stars}${tk.minutes ? ` · ${tf("≈ {n} мин", { n: tk.minutes })}` : ""}${tk.repeat === "once" ? ` · <b class="once">${t("разовое")}</b>` : ""}</span></div>${right}</div>`;
 }
 
 export function musicLinks(k) {
@@ -96,7 +96,7 @@ function timerHtml(k, ui) {
 }
 
 export function vTasks(k, ui) {
-  const mv = k.tasks.filter(x => x.kind === "move"), cl = [zoneTask()].concat(k.tasks.filter(x => x.kind === "clean"));
+  const open = k.tasks.filter(x => !isOnceDone(k, x)), mv = open.filter(x => x.kind === "move"), cl = [zoneTask()].concat(open.filter(x => x.kind === "clean"));
   return `<div class="sectionhead"><span class="tag move">${t("Движение")}</span></div>
     <div style="display:flex;flex-direction:column;gap:10px">${mv.map(x => taskCard(k, x)).join("") || `<div class="muted">${t("Заданий пока нет")}</div>`}</div>
     <div class="sectionhead" style="margin-top:8px"><span class="tag clean">${t("Уборка")}</span></div>
@@ -176,8 +176,12 @@ export function vParent(M, ui) {
   const k = kids.find(x => x.id === ui.pk), wk = week(k), max = Math.max(1, ...wk.map(d => d.move + d.clean));
   const settings = `${kids.length > 1 ? `<div class="muted">${t("Для кого настраиваем:")}</div>` : ""}
     <div class="pk" role="group">${kids.map(x => `<button class="pill ${x.id === k.id ? "on" : ""}" data-act="pk" data-id="${x.id}">${esc(x.name)}</button>`).join("")}</div>
-    <div class="card"><h3>${t("Бонус за старание")}</h3><div class="muted">${t("Например, если убралась без напоминания.")}</div>
-      <div class="row" style="flex-wrap:wrap">${[1, 3, 5].map(n => `<button class="btn small" data-act="bonus" data-id="${n}">+${n}</button>`).join("")}</div></div>
+    <div class="card"><h3>${t("Бонус за старание")}</h3>
+      <div class="muted">${t("Бонус сразу попадает на счёт ребёнка, без подтверждения. Например, за уборку без напоминания.")}</div>
+      <div class="pills" style="justify-content:flex-start" role="group">${[1, 3, 5, 10].map(n => `<button class="pill ${ui.bonusN === n ? "on" : ""}" data-act="bonusPick" data-id="${n}">+${n} ★</button>`).join("")}</div>
+      <input type="text" id="bonusWhy" maxlength="60" placeholder="${t("За что? (необязательно)")}" aria-label="${t("За что бонус")}">
+      <button class="btn" data-act="bonusGive">${tf("Выдать +{n} ★ ({name})", { name: k.name, n: ui.bonusN })}</button>
+      ${k.log.filter(l => l.kind === "bonus").sort((a, b) => b.ts - a.ts).slice(0, 3).map(l => `<div class="pending"><div class="grow">+${l.stars} ★ · ${esc(disp(l.title))}<div class="muted">${esc(l.day)}</div></div><button class="btn small ghost" data-act="bonusUndo" data-id="${l.id}">${t("Отменить")}</button></div>`).join("")}</div>
     <div class="card"><h3>${t("Последние 7 дней")}</h3>
       <div class="chart">${wk.map(d => { const tot = d.move + d.clean; return `<div class="col"><span>${tot || ""}</span><div class="stack" style="height:${Math.round(tot / max * 90)}px"><i style="height:${tot ? d.move / tot * 100 : 0}%;background:var(--move)"></i><i style="height:${tot ? d.clean / tot * 100 : 0}%;background:var(--clean)"></i></div><span class="muted">${t(d.wd)}</span></div>`; }).join("")}</div>
       <div class="legend"><span><b style="background:var(--move)"></b>${t("Движение")}</span><span><b style="background:var(--clean)"></b>${t("Уборка")}</span></div>
@@ -187,18 +191,19 @@ export function vParent(M, ui) {
       <div class="pills" style="justify-content:flex-start">${[2, 3, 4].map(n => `<button class="pill ${k.economy.tasksPerDay === n ? "on" : ""}" data-act="econTasks" data-id="${n}">${n}</button>`).join("")}</div>
       <div class="muted">${t("1 звезда — это примерно столько минут усилий:")}</div>
       <div class="pills" style="justify-content:flex-start">${[5, 10, 15].map(n => `<button class="pill ${k.economy.minutesPerStar === n ? "on" : ""}" data-act="econMinutes" data-id="${n}">${tf("{n} мин", { n })}</button>`).join("")}</div>
-      <div class="econ"><b>${tf("≈ {d} ★ в день, ≈ {w} ★ в неделю", { d: Math.round(dailyStars(k) * 10) / 10, w: Math.round(dailyStars(k) * 7) })}</b></div>
+      <div class="econ"><b>${tf("≈ {d} ★ в день, ≈ {w} ★ в неделю", { d: Math.round(dailyStars(k) * 10) / 10, w: Math.round(dailyStars(k) * 7) })}</b><div class="muted">${tf("Это примерно {n} мин усилий в день", { n: Math.round(dailyMinutes(k) / 5) * 5 })}</div></div>
       <div class="muted">${t("Ориентир цен на награды:")}</div>
       <div class="ladder">${TIERS.map(x => `<div class="rung"><span>${t(x.name)}</span><b>${tierPrice(k, x)} ★</b><span class="muted">${tf("≈ {n} дн.", { n: x.days })}</span></div>`).join("")}</div>
       <div class="hint">${tf("Расчёт: {n} задания в день × типичные {s} ★ × 70% (ребёнок делает не всё).", { n: k.economy.tasksPerDay, s: Math.round(typicalStars(k) * 10) / 10 })}</div></div>
     <div class="card"><h3>${t("Задания")}</h3>
-      ${k.tasks.map(x => `<div class="pending"><div class="grow">${esc(x.icon || "")} ${esc(disp(x.title))}<div class="muted">${tf(x.kind === "move" ? "Движение · {n}★" : "Уборка · {n}★", { n: x.stars })}</div></div><button class="nobtn" data-act="delTask" data-id="${esc(x.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
+      ${k.tasks.map(x => `<div class="pending"><div class="grow">${esc(x.icon || "")} ${esc(disp(x.title))}<div class="muted">${tf(x.kind === "move" ? "Движение · {n}★" : "Уборка · {n}★", { n: x.stars })}${x.minutes ? " · " + tf("≈ {n} мин", { n: x.minutes }) : ""} · ${t(x.repeat === "once" ? (isOnceDone(k, x) ? "разовое, выполнено" : "разовое") : "каждый день")}</div></div><button class="nobtn" data-act="delTask" data-id="${esc(x.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
       <div class="formrow"><input class="full" type="text" id="ntTitle" placeholder="${t("Новое задание")}" maxlength="60" aria-label="${t("Новое задание")}">
         <select id="ntKind" aria-label="${t("Тип задания")}"><option value="move">${t("Движение")}</option><option value="clean">${t("Уборка")}</option></select>
-        <select id="ntHard" aria-label="${t("Сложность")}">${HARDNESS.map(h => `<option value="${h.id}" ${h.id === "normal" ? "selected" : ""}>${t(h.name)}</option>`).join("")}</select>
+        <select id="ntRepeat" aria-label="${t("Как часто")}"><option value="daily">${t("Каждый день")}</option><option value="once">${t("Разовое")}</option></select>
         <input type="number" id="ntMin" min="1" max="120" placeholder="${t("Минут")}" aria-label="${t("Сколько минут")}">
+        <select id="ntHard" aria-label="${t("Сложность")}">${HARDNESS.map(h => `<option value="${h.id}" ${h.id === "normal" ? "selected" : ""}>${t(h.name)}</option>`).join("")}</select>
         <input type="number" id="ntStars" min="1" max="10" value="2" aria-label="${t("Звёзд")}">
-        <button class="btn small ghost full" data-act="suggestStars">${t("Подсказать звёзды по минутам и сложности")}</button>
+        <div class="hint full" id="ntHint">${t("Звёзды считаются сами по минутам и сложности. Их можно поправить вручную.")}</div>
         <button class="btn small full" data-act="addTask">${t("Добавить задание")}</button></div></div>
     <div class="card"><h3>${t("Награды")}</h3>
       ${k.rewards.map(r => `<div class="pending"><div class="grow">${esc(r.icon || "🎁")} ${esc(t(r.title))}<div class="muted">${rewardNote(k, r.cost)}</div></div><button class="nobtn" data-act="delReward" data-id="${esc(r.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
@@ -210,4 +215,13 @@ export function vParent(M, ui) {
       <input type="text" id="plYm" value="${esc(k.playlists.yandex)}" placeholder="https://music.yandex.ru/users/…/playlists/…" aria-label="${t("Ссылка Яндекс Музыки")}">
       <button class="btn small" data-act="setPlaylists">${t("Сохранить плейлисты")}</button></div>`;
   return `${errBox(ui.err)}${pending}${settings}${kidList}${family}`;
+}
+
+// ---------- settings ----------
+export function vSettings(S, ui) {
+  const pills = (act, cur, items) => `<div class="pills" style="justify-content:flex-start" role="group">${items.map(([id, name]) => `<button class="pill ${cur === id ? "on" : ""}" data-act="${act}" data-id="${id}">${name}</button>`).join("")}</div>`;
+  return `<div class="in"><div class="row"><h2 class="grow">${t("Настройки")}</h2><button class="btn small ghost" data-act="closeSettings">${t("Закрыть")}</button></div>
+    <div class="card"><h3>${t("Язык")}</h3>${pills("setLang", getLang(), [["ru", "Русский"], ["en", "English"]])}</div>
+    <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}</div>
+    ${S.user ? `<div class="card"><h3>${t("Аккаунт")}</h3><div class="muted">${esc(S.user.email || "")}</div><button class="btn ghost" data-act="signout">${t("Выйти из аккаунта")}</button></div>` : ""}</div>`;
 }

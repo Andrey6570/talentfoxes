@@ -150,7 +150,8 @@ export async function decideLog(kid, entry, ok) {
   if (ok) { const patch = streakAfter(kid, entry.day); if (patch) await updateDoc(kidRef(kid.id), patch); }
 }
 export const decideOrder = (kid, order, status) => updateDoc(doc(db, "families", M.family.id, "kids", kid.id, "orders", order.id), { status });
-export const giveBonus = (kid, n) => addDoc(collection(db, "families", M.family.id, "kids", kid.id, "log"), { type: "bonus", taskId: "bonus", title: "Бонус за старание", kind: "bonus", stars: n, status: "done", day: today(), ts: Date.now() });
+export const giveBonus = (kid, n, why) => addDoc(collection(db, "families", M.family.id, "kids", kid.id, "log"), { type: "bonus", taskId: "bonus", title: why || "Бонус за старание", kind: "bonus", stars: n, status: "done", day: today(), ts: Date.now() });
+export const deleteLog = (kid, entry) => deleteDoc(doc(db, "families", M.family.id, "kids", kid.id, "log", entry.id));
 
 // ---- child actions ----
 export function submitTask(kid, task) {
