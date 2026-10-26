@@ -1,12 +1,12 @@
 // Live data from Firestore plus every write the app makes.
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, arrayUnion } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, arrayUnion, increment } from "firebase/firestore";
 import { auth, db, googleSignIn, appSignOut, passwordSignIn, createChildAuthUser } from "./fb.js";
 import { KID_EMAIL_DOMAIN } from "./config.js";
-import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid } from "./domain.js";
+import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid, planFee, defaultRules } from "./domain.js";
 
 // role: null (signed out) | "parent" | "kid"
-export const M = { ready: false, user: null, role: null, family: null, kids: [], error: "" };
+export const M = { ready: false, user: null, role: null, family: null, kids: [], error: "", shared: { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } } };
 
 let notify = () => {};
 let unsubs = [];
@@ -15,6 +15,7 @@ let kidDocs = [];
 const LOGS = new Map(), ORDERS = new Map();
 
 function stopAll() {
+  M.shared = { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } };
   unsubs.forEach(f => f()); unsubs = [];
   kidSubs.forEach(arr => arr.forEach(f => f())); kidSubs = new Map();
   kidDocs = []; LOGS.clear(); ORDERS.clear();
@@ -43,6 +44,17 @@ function watchKids(fid, snapQuery) {
     rebuild();
   }, onErr));
 }
+// family-wide documents: rules and the family pot (readable by the parents and by the family's children)
+function watchShared(fid) {
+  unsubs.push(onSnapshot(collection(db, "families", fid, "shared"), snap => {
+    const by = {}; snap.docs.forEach(d => { by[d.id] = d.data(); });
+    M.shared = {
+      rules: (by.rules && by.rules.items) || [], rulesSaved: !!by.rules,
+      pot: Object.assign({ total: 0, goalTitle: "", goalCost: 0 }, by.pot || {})
+    };
+    notify();
+  }, onErr));
+}
 function onErr(e) { M.error = e && e.code ? e.code : String(e); notify(); }
 
 async function loadParent(user) {
@@ -53,7 +65,7 @@ async function loadParent(user) {
     if (!fid) { M.family = null; notify(); return; }
     const first = !M.family || M.family.id !== fid;
     M.family = Object.assign({ id: fid }, d.data());
-    if (first) watchKids(fid, collection(db, "families", fid, "kids"));
+    if (first) { watchKids(fid, collection(db, "families", fid, "kids")); watchShared(fid); }
     notify();
   }, onErr));
 }
@@ -65,6 +77,7 @@ async function loadKid(user) {
   if (!inv.exists()) throw new Error("no-family");
   const fid = inv.data().fid;
   M.family = { id: fid };
+  watchShared(fid);
   watchKids(fid, query(collection(db, "families", fid, "kids"), where("kidUid", "==", user.uid)));
 }
 
@@ -148,9 +161,37 @@ export const savePlaylists = (kid, playlists) => updateDoc(kidRef(kid.id), { pla
 export async function decideLog(kid, entry, ok) {
   await updateDoc(doc(db, "families", M.family.id, "kids", kid.id, "log", entry.id), { status: ok ? "done" : "rejected" });
   if (ok) { const patch = streakAfter(kid, entry.day); if (patch) await updateDoc(kidRef(kid.id), patch); }
+  if (ok && entry.kind === "repair") await adjustPot(-entry.stars);
 }
 export const decideOrder = (kid, order, status) => updateDoc(doc(db, "families", M.family.id, "kids", kid.id, "orders", order.id), { status });
 export const giveBonus = (kid, n, why) => addDoc(collection(db, "families", M.family.id, "kids", kid.id, "log"), { type: "bonus", taskId: "bonus", title: why || "Бонус за старание", kind: "bonus", stars: n, status: "done", day: today(), ts: Date.now() });
+const sharedDoc = id => doc(db, "families", M.family.id, "shared", id);
+export const saveRules = items => setDoc(sharedDoc("rules"), { items });
+export const seedRules = () => saveRules(defaultRules());
+export const saveGoal = (goalTitle, goalCost) => setDoc(sharedDoc("pot"), { goalTitle, goalCost }, { merge: true });
+export const adjustPot = n => setDoc(sharedDoc("pot"), { total: increment(n) }, { merge: true });
+export const resetPot = () => setDoc(sharedDoc("pot"), { total: 0 }, { merge: true });
+
+// Apply a family rule to a child: a reminder the first time within a week, a contribution afterwards.
+export async function applyRule(kid, rule) {
+  const plan = planFee(kid, rule), ref = doc(collection(db, "families", M.family.id, "kids", kid.id, "log"));
+  const b = writeBatch(db), base = { ruleId: rule.id, title: rule.title, status: "done", day: today(), ts: Date.now() };
+  if (plan.kind === "fee") {
+    b.set(ref, Object.assign({ type: "fee", kind: "fee", taskId: "fee", stars: plan.amount, repair: rule.repair || "" }, base));
+    b.set(sharedDoc("pot"), { total: increment(plan.amount) }, { merge: true });
+  } else {
+    b.set(ref, Object.assign({ type: "warn", kind: "warn", taskId: "warn", stars: 0 }, base));
+  }
+  await b.commit();
+  return plan;
+}
+// Undo a reminder or contribution; the pot gives the stars back too.
+export async function undoRule(kid, entry) {
+  const b = writeBatch(db);
+  b.delete(doc(db, "families", M.family.id, "kids", kid.id, "log", entry.id));
+  if (entry.kind === "fee") b.set(sharedDoc("pot"), { total: increment(-entry.stars) }, { merge: true });
+  await b.commit();
+}
 export const deleteLog = (kid, entry) => deleteDoc(doc(db, "families", M.family.id, "kids", kid.id, "log", entry.id));
 
 // ---- child actions ----

@@ -1,7 +1,7 @@
 import { t, tf, pl, disp, getLang } from "./i18n.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
-import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, isOnceDone, dailyMinutes, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
+import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
 
 import { esc } from "./util.js";
 export { esc };
@@ -61,7 +61,36 @@ export function musicLinks(k) {
   return out.join("");
 }
 
-export function vHome(k) {
+// ---------- family pot, rules and messages from the fox ----------
+const kindName = kind => t(kind === "move" ? "Движение" : kind === "repair" ? "Ремонт" : "Уборка");
+
+function noticeCard(k, l) {
+  if (l.kind === "warn") return `<div class="notice"><b>${t("Напоминание лисёнка")}</b><div>${esc(disp(l.title))}</div><div class="muted">${t("Звёзды не списаны. Если это повторится на этой неделе, в копилку уйдёт взнос.")}</div></div>`;
+  const rid = "repair-" + l.id, st = statusOf(k, rid, "once");
+  let tail = "";
+  if (l.repair) {
+    if (st === "done") tail = `<div class="state ok">${t("Ремонт засчитан, звёзды вернулись")}</div>`;
+    else if (st === "pending") tail = `<div class="state wait">${t("Ремонт ждёт проверки")}</div>`;
+    else if (repairOpen(k, l)) tail = `<div class="muted">${tf("Верни звёзды: {x}. Успей за сутки.", { x: esc(disp(l.repair)) })}</div><button class="btn small" data-act="repair" data-id="${esc(l.id)}">${t("Сделано!")}</button>`;
+    else tail = `<div class="muted">${t("Срок ремонта вышел")}</div>`;
+  }
+  return `<div class="notice"><b>${tf("В копилку ушло {n} ★", { n: l.stars })}</b><div>${esc(disp(l.title))}</div>${tail}</div>`;
+}
+
+export function vPotCard(k, shared) {
+  const pot = shared.pot, goal = pot.goalCost > 0 && pot.goalTitle;
+  const pct = goal ? Math.min(100, Math.round(pot.total / pot.goalCost * 100)) : 0;
+  const rules = shared.rules;
+  const notes = noticesOf(k).map(l => noticeCard(k, l)).join("");
+  return `${notes ? `<div class="card"><h3>${t("Сообщения от лисёнка")}</h3>${notes}</div>` : ""}
+    <div class="card"><h3>${t("Семейная копилка")}</h3>
+      ${goal ? `<div class="bar xp"><i style="width:${pct}%"></i></div><div class="muted">${tf("{t}: {a} из {b} ★", { t: esc(pot.goalTitle), a: pot.total, b: pot.goalCost })}</div>`
+        : `<div class="muted">${tf("В копилке {n} ★. Родители скоро выберут, на что её потратить.", { n: pot.total })}</div>`}
+      ${rules.length ? `<div class="muted">${t("Правила семьи")}</div><div class="ladder">${rules.map(r => `<div class="rung"><span>${esc(disp(r.title))}</span><b>${r.cost} ★</b><span></span></div>`).join("")}</div>
+        <div class="hint">${t("Первый раз за неделю это только напоминание. Взнос идёт в общую копилку, и его можно вернуть ремонтом.")}</div>` : ""}</div>`;
+}
+
+export function vHome(k, shared) {
   const lv = level(k), m = mood(k), sk = aliveStreak(k), says = SAYS[m], say = says[new Date().getDate() % says.length], links = musicLinks(k);
   const label = tf(m === "happy" ? "{pet}, настроение: радостное" : m === "ok" ? "{pet}, настроение: спокойное" : "{pet}, настроение: скучает", { pet: k.pet.name });
   return `<div class="card petcard">
@@ -80,6 +109,7 @@ export function vHome(k) {
       <div class="muted" style="text-align:center">${t("Заморозка спасает серию, если пропустить один день. Новая даётся за каждые 7 дней подряд.")}</div></div>
     <div class="card"><h3>${t("Персонаж")}</h3>
       <div class="chars" role="group" aria-label="${t("Персонаж")}">${CHARACTERS.map(c => `<button class="char ${c.available && c.id === characterOf(k).id ? "on" : ""}" data-act="character" data-id="${c.id}" ${c.available ? "" : "disabled"}><span class="cn">${t(c.name)}</span><span class="cs">${c.available ? (c.id === characterOf(k).id ? t("Выбран") : t("Выбрать")) : t("Скоро")}</span></button>`).join("")}</div></div>
+    ${vPotCard(k, shared)}
     <div class="card"><h3>${t("Музыка для дел")}</h3>${links ? `<div class="muted">${t("Включить плейлист:")}</div><div class="music">${links}</div>` : `<div class="muted">${t("Родители ещё не добавили плейлист.")}</div>`}</div>`;
 }
 
@@ -134,6 +164,15 @@ export function vShop(k) {
 }
 
 // ---------- parent cabinet ----------
+export function rulePreview(k, rule) {
+  if (!rule) return "";
+  const plan = planFee(k, rule);
+  if (plan.kind === "warn") {
+    const why = plan.why === "first" ? "Первый раз за неделю: только напоминание, звёзды не списываются." : plan.why === "empty" ? "У ребёнка нет звёзд: будет только напоминание." : "Недельный потолок взносов исчерпан: будет только напоминание.";
+    return `<b>${t("Напоминание")}</b><div class="muted">${t(why)}</div>`;
+  }
+  return `<b>${tf("Взнос {n} ★ в семейную копилку", { n: plan.amount })}</b><div class="muted">${plan.capped ? t("Сумма уменьшена из-за потолка. ") : ""}${rule.repair ? tf("Ребёнок сможет вернуть звёзды ремонтом: {x}", { x: esc(disp(rule.repair)) }) : t("Ремонта у этого правила нет.")}</div>`;
+}
 function rewardNote(k, cost) {
   const d = daysToEarn(k, cost), v = priceVerdict(k, cost);
   const days = d < 1.5 ? t("≈ 1 дня заработка") : tf("≈ {n} дн. заработка", { n: Math.round(d) });
@@ -149,7 +188,7 @@ export function vParent(M, ui) {
   });
   const tag = x => kids.length > 1 ? `<span class="kidtag">${esc(x.name)}</span> ` : "";
   const pending = `<div class="card"><h3>${t("Нужно подтвердить")}</h3>${pendLogs.length || pendOrders.length ? "" : `<div class="muted">${t("Пока ничего нет")}</div>`}
-    ${pendLogs.map(({ k: x, l }) => `<div class="pending"><div class="grow"><div>${tag(x)}${esc(disp(l.title))}</div><div class="muted">${tf("{k} · +{n} {w}", { k: t(l.kind === "move" ? "Движение" : "Уборка"), n: l.stars, w: pl(l.stars, "звезда|звезды|звёзд", "star|stars") })}</div></div><button class="nobtn" data-act="logNo" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Не засчитать")}">✕</button><button class="okbtn" data-act="logOk" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Засчитать")}">✓</button></div>`).join("")}
+    ${pendLogs.map(({ k: x, l }) => `<div class="pending"><div class="grow"><div>${tag(x)}${esc(disp(l.title))}</div><div class="muted">${tf("{k} · +{n} {w}", { k: kindName(l.kind), n: l.stars, w: pl(l.stars, "звезда|звезды|звёзд", "star|stars") })}</div></div><button class="nobtn" data-act="logNo" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Не засчитать")}">✕</button><button class="okbtn" data-act="logOk" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Засчитать")}">✓</button></div>`).join("")}
     ${pendOrders.map(({ k: x, o }) => `<div class="pending"><div class="grow"><div>${tag(x)}${esc(o.icon || "🎁")} ${esc(t(o.title))}</div><div class="muted">${tf("Награда за {n} {w}", { n: o.cost, w: pl(o.cost, "звезду|звезды|звёзд", "star|stars") })}</div></div><button class="nobtn" data-act="orderNo" data-kid="${x.id}" data-id="${o.id}" aria-label="${t("Вернуть звёзды")}">↩</button><button class="okbtn" data-act="orderOk" data-kid="${x.id}" data-id="${o.id}" aria-label="${t("Выдано")}">✓</button></div>`).join("")}</div>`;
 
   const family = `<div class="card"><h3>${t("Семья")}</h3>
@@ -157,6 +196,25 @@ export function vParent(M, ui) {
       <div class="muted">${t("Код семьи")}</div><div class="code" id="famCode">${esc(fam.inviteCode)}</div>
       <div class="hint">${t("Этот код нужен ребёнку для входа и второму родителю для присоединения.")}</div>
       <div class="hint">${tf("Родителей в семье: {n} из 2", { n: (fam.parentUids || []).length })}</div></div>`;
+
+  const sh = M.shared;
+  const famRules = `<div class="card"><h3>${t("Правила семьи")}</h3>
+      <div class="muted">${t("Составьте правила вместе с ребёнком. Цена каждого известна заранее, а взнос идёт в семейную копилку, а не пропадает.")}</div>
+      ${sh.rules.map(r => `<div class="pending"><div class="grow">${esc(disp(r.title))}<div class="muted">${tf("Взнос {n} ★", { n: r.cost })}${r.repair ? " · " + tf("ремонт: {x}", { x: esc(disp(r.repair)) }) : ""}</div></div><button class="nobtn" data-act="delRule" data-id="${esc(r.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
+      ${sh.rulesSaved ? "" : `<button class="btn small ghost" data-act="seedRules">${t("Добавить примеры правил")}</button>`}
+      <div class="formrow"><input class="full" type="text" id="ruTitle" maxlength="60" placeholder="${t("Новое правило")}" aria-label="${t("Новое правило")}">
+        <input type="number" id="ruCost" min="1" max="${FEE_CAP_ONCE}" value="1" aria-label="${t("Взнос в звёздах")}">
+        <input type="text" id="ruRepair" maxlength="60" placeholder="${t("Ремонт (необязательно)")}" aria-label="${t("Ремонт")}">
+        <button class="btn small full" data-act="addRule">${t("Добавить правило")}</button></div>
+      <div class="hint">${tf("Не больше {n} ★ за раз и не больше 20% от заработка ребёнка за неделю. Баланс не уходит ниже нуля.", { n: FEE_CAP_ONCE })}</div></div>
+    <div class="card"><h3>${t("Семейная копилка")}</h3>
+      <div class="econ"><b>${tf("В копилке: {n} ★", { n: sh.pot.total })}</b></div>
+      <div class="formrow"><input class="full" type="text" id="potGoal" maxlength="40" value="${esc(sh.pot.goalTitle)}" placeholder="${t("На что копим, например пицца-вечер")}" aria-label="${t("Цель копилки")}">
+        <input type="number" id="potCost" min="1" max="500" value="${sh.pot.goalCost || ""}" placeholder="${t("Цена в ★")}" aria-label="${t("Цена цели")}">
+        <button class="btn small" data-act="saveGoal">${t("Сохранить цель")}</button></div>
+      <div class="row" style="flex-wrap:wrap"><button class="btn small ghost" data-act="potAdd" data-id="1">+1 ★</button><button class="btn small ghost" data-act="potAdd" data-id="5">+5 ★</button>
+        ${sh.pot.total > 0 ? `<button class="btn small ghost" data-act="potReset">${t("Потратили, обнулить")}</button>` : ""}</div>
+      <div class="hint">${t("Родители тоже могут пополнять копилку.")}</div></div>`;
 
   const kidList = `<div class="card"><h3>${t("Дети")}</h3>
       ${kids.length ? "" : `<div class="muted">${t("Добавьте первого ребёнка")}</div>`}
@@ -170,7 +228,7 @@ export function vParent(M, ui) {
         <input type="text" id="nkPw" autocomplete="off" maxlength="40" placeholder="${t("Пароль, от 6 символов")}" aria-label="${t("Пароль")}">
         <button class="btn small full" data-act="addKid" ${ui.busy ? "disabled" : ""}>${t("Добавить ребёнка")}</button></div></div>`;
 
-  if (!kids.length) return `${errBox(ui.err)}${pending}${kidList}${family}`;
+  if (!kids.length) return `${errBox(ui.err)}${pending}${kidList}${famRules}${family}`;
 
   if (!kids.find(x => x.id === ui.pk)) ui.pk = kids[0].id;
   const k = kids.find(x => x.id === ui.pk), wk = week(k), max = Math.max(1, ...wk.map(d => d.move + d.clean));
@@ -182,6 +240,11 @@ export function vParent(M, ui) {
       <input type="text" id="bonusWhy" maxlength="60" placeholder="${t("За что? (необязательно)")}" aria-label="${t("За что бонус")}">
       <button class="btn" data-act="bonusGive">${tf("Выдать +{n} ★ ({name})", { name: k.name, n: ui.bonusN })}</button>
       ${k.log.filter(l => l.kind === "bonus").sort((a, b) => b.ts - a.ts).slice(0, 3).map(l => `<div class="pending"><div class="grow">+${l.stars} ★ · ${esc(disp(l.title))}<div class="muted">${esc(l.day)}</div></div><button class="btn small ghost" data-act="bonusUndo" data-id="${l.id}">${t("Отменить")}</button></div>`).join("")}</div>
+    <div class="card"><h3>${t("Применить правило")}</h3>
+      ${sh.rules.length ? `<select id="applyRule" aria-label="${t("Правило")}">${sh.rules.map(r => `<option value="${esc(r.id)}" ${r.id === ui.ruleId ? "selected" : ""}>${esc(disp(r.title))} · ${r.cost} ★</option>`).join("")}</select>
+      <div class="econ" id="rulePreview">${rulePreview(k, sh.rules.find(r => r.id === ui.ruleId) || sh.rules[0])}</div>
+      <button class="btn" data-act="applyRule">${tf("Применить ({name})", { name: k.name })}</button>` : `<div class="muted">${t("Сначала добавьте правила семьи ниже.")}</div>`}
+      ${k.log.filter(l => l.kind === "fee" || l.kind === "warn").sort((a, b) => b.ts - a.ts).slice(0, 3).map(l => `<div class="pending"><div class="grow">${l.kind === "fee" ? tf("Взнос {n} ★", { n: l.stars }) : t("Напоминание")} · ${esc(disp(l.title))}<div class="muted">${esc(l.day)}</div></div>${l.kind === "fee" && k.log.some(x => x.taskId === "repair-" + l.id && x.status === "done") ? "" : `<button class="btn small ghost" data-act="ruleUndo" data-id="${l.id}">${t("Отменить")}</button>`}</div>`).join("")}</div>
     <div class="card"><h3>${t("Последние 7 дней")}</h3>
       <div class="chart">${wk.map(d => { const tot = d.move + d.clean; return `<div class="col"><span>${tot || ""}</span><div class="stack" style="height:${Math.round(tot / max * 90)}px"><i style="height:${tot ? d.move / tot * 100 : 0}%;background:var(--move)"></i><i style="height:${tot ? d.clean / tot * 100 : 0}%;background:var(--clean)"></i></div><span class="muted">${t(d.wd)}</span></div>`; }).join("")}</div>
       <div class="legend"><span><b style="background:var(--move)"></b>${t("Движение")}</span><span><b style="background:var(--clean)"></b>${t("Уборка")}</span></div>
@@ -214,7 +277,7 @@ export function vParent(M, ui) {
       <input type="text" id="plSp" value="${esc(k.playlists.spotify)}" placeholder="https://open.spotify.com/playlist/…" aria-label="${t("Ссылка Spotify")}">
       <input type="text" id="plYm" value="${esc(k.playlists.yandex)}" placeholder="https://music.yandex.ru/users/…/playlists/…" aria-label="${t("Ссылка Яндекс Музыки")}">
       <button class="btn small" data-act="setPlaylists">${t("Сохранить плейлисты")}</button></div>`;
-  return `${errBox(ui.err)}${pending}${settings}${kidList}${family}`;
+  return `${errBox(ui.err)}${pending}${settings}${famRules}${kidList}${family}`;
 }
 
 // ---------- settings ----------

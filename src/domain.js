@@ -69,17 +69,21 @@ export const newKidDoc = (name, login, kidUid) => ({
 });
 
 // ---- derived values ----
+// Balance = everything approved (bonuses and repairs included) minus purchases and family contributions.
+// Level progress ("total") counts only real effort, so a contribution never lowers the level.
+export const sum = (list, f = x => x.stars) => list.reduce((s, l) => s + (f(l) || 0), 0);
 export function derive(doc, log, orders) {
   const done = log.filter(l => l.status === "done");
-  const total = done.reduce((s, l) => s + (l.stars || 0), 0);
-  const spent = orders.filter(o => o.status !== "refused").reduce((s, o) => s + (o.cost || 0), 0);
+  const earned = sum(done.filter(l => l.kind !== "fee" && l.kind !== "warn"));
+  const total = sum(done.filter(l => l.kind !== "fee" && l.kind !== "warn" && l.kind !== "repair"));
+  const spent = sum(orders.filter(o => o.status !== "refused"), o => o.cost) + sum(done.filter(l => l.kind === "fee"));
   const base = newKidDoc("", "", "");
   return Object.assign({}, doc, {
     pet: Object.assign({}, base.pet, doc.pet || {}),
     playlists: Object.assign({}, base.playlists, doc.playlists || {}),
     economy: Object.assign({}, base.economy, doc.economy || {}),
     tasks: doc.tasks || [], rewards: doc.rewards || [],
-    log, orders, total, stars: total - spent
+    log, orders, total, stars: earned - spent
   });
 }
 export const entries = k => k.log.filter(l => l.day === today());
@@ -168,3 +172,33 @@ export function taskStars(k, minutes, hardId) {
 }
 export const daysToEarn = (k, cost) => { const d = dailyStars(k); return d > 0 ? cost / d : 0; };
 export const priceVerdict = (k, cost) => { const d = daysToEarn(k, cost); return d < 1 ? "cheap" : d > 45 ? "dear" : "ok"; };
+
+// ---- family rules: contribution to the family pot ----
+// A rule has a fixed price agreed in advance. The first slip of a rule within a week is only a reminder; from the
+// second one a small contribution goes to the family pot, never more than the caps below and never below zero.
+export const FEE_CAP_ONCE = 3;
+export const FEE_CAP_WEEK_SHARE = 0.2;
+export const REPAIR_WINDOW_MS = 24 * 3600 * 1000;
+export const NOTICE_WINDOW_MS = 3 * 24 * 3600 * 1000;
+export const defaultRules = () => [
+  { id: "u1", title: "Не убрал после игры", cost: 1, repair: "Собрать игрушки" },
+  { id: "u2", title: "Грубое слово", cost: 2, repair: "Извиниться и помочь по дому" },
+  { id: "u3", title: "Не сделал вовремя то, о чём договорились", cost: 1, repair: "" }
+];
+export function planFee(k, rule, now = Date.now()) {
+  const weekAgo = now - 7 * 864e5;
+  const recent = k.log.filter(l => l.ruleId === rule.id && (l.kind === "warn" || l.kind === "fee") && l.ts >= weekAgo);
+  if (!recent.length) return { kind: "warn", amount: 0, why: "first" };
+  const week = k.log.filter(l => l.status === "done" && l.ts >= weekAgo);
+  const earnedWeek = sum(week.filter(l => l.kind !== "fee" && l.kind !== "warn" && l.kind !== "repair"));
+  const feesWeek = sum(week.filter(l => l.kind === "fee"));
+  const room = Math.floor(earnedWeek * FEE_CAP_WEEK_SHARE) - feesWeek;
+  const amount = Math.max(0, Math.min(rule.cost, FEE_CAP_ONCE, room, k.stars));
+  if (amount <= 0) return { kind: "warn", amount: 0, why: k.stars <= 0 ? "empty" : "cap" };
+  return { kind: "fee", amount, capped: amount < rule.cost };
+}
+// recent reminders and contributions the child should see
+export const noticesOf = (k, now = Date.now()) =>
+  k.log.filter(l => (l.kind === "fee" || l.kind === "warn") && now - l.ts <= NOTICE_WINDOW_MS).sort((a, b) => b.ts - a.ts);
+export const repairOpen = (k, fee, now = Date.now()) =>
+  !!fee.repair && now - fee.ts <= REPAIR_WINDOW_MS && statusOf(k, "repair-" + fee.id, "once") === null;

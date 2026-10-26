@@ -9,6 +9,11 @@ service cloud.firestore {
     function isKid(fid, kid) {
       return signedIn() && get(/databases/$(database)/documents/families/$(fid)/kids/$(kid)).data.kidUid == request.auth.uid;
     }
+    // a child account of this family: its sign-in address ends with __<family code>@kid.talantfoxes.app
+    function isFamilyKid(fid) {
+      return signedIn() && !isGoogle() && request.auth.token.email != null
+        && request.auth.token.email.matches('.*__' + get(famPath(fid)).data.inviteCode + '@kid\\.talantfoxes\\.app');
+    }
     function onlyStatusChanges() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']); }
 
     // invite code -> family id; used by a second parent to join and by a child to find the family
@@ -40,6 +45,12 @@ service cloud.firestore {
           && request.resource.data.joinProof == resource.data.inviteCode
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUids', 'joinProof']))
       );
+
+      // family rules and the family pot: parents write, the family's children read
+      match /shared/{doc} {
+        allow read: if isParent(fid) || isFamilyKid(fid);
+        allow write: if isParent(fid);
+      }
 
       match /kids/{kid} {
         allow read: if isParent(fid) || (signedIn() && resource.data.kidUid == request.auth.uid);

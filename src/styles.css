@@ -203,3 +203,7 @@ label.muted { margin-bottom: -6px; }
 
 .once { color: var(--accent); }
 .formrow .hint { align-self: center; }
+
+/* messages from the fox */
+.notice { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 12px; border-radius: 14px; background: var(--surface2); }
+.notice .btn { align-self: stretch; }

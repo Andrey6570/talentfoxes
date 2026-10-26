@@ -2,7 +2,8 @@ import "./styles.css";
 import { t, tf, getLang, toggleLang } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteLog, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteLog, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+import { FEE_CAP_ONCE } from "./domain.js";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars } from "./domain.js";
 
 const $ = s => document.querySelector(s);
@@ -10,7 +11,7 @@ const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return
 
 const THEME_KEY = "talent-foxes-theme";
 const ui = { settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
-  wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
+  ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
 
@@ -73,7 +74,7 @@ function render() {
   else if (role === "parent" && !S.family) html = V.vFamilySetup(S, ui);
   else if (role === "parent") html = V.vParent(S, ui);
   else if (!k) html = `<div class="card result"><h3>${t(S.error ? "Не удалось открыть профиль" : "Загрузка…")}</h3><div class="muted">${S.error ? esc(S.error) : ""}</div></div>`;
-  else html = ui.tab === "home" ? V.vHome(k) : ui.tab === "tasks" ? V.vTasks(k, ui) : ui.tab === "wheel" ? V.vWheel(k, ui) : V.vShop(k);
+  else html = ui.tab === "home" ? V.vHome(k, S.shared) : ui.tab === "tasks" ? V.vTasks(k, ui) : ui.tab === "wheel" ? V.vWheel(k, ui) : V.vShop(k);
   if (!typing) $("#view").innerHTML = html;
   $("#view").style.cssText = "display:flex;flex-direction:column;gap:16px";
   $("#sync").textContent = S.user ? t("Данные сохраняются в вашей семье и доступны на других устройствах") : "";
@@ -149,6 +150,24 @@ const A = {
   logNo(id, el) { const k = parentKid(el.dataset.kid), l = k && k.log.find(x => x.id === id); if (l) decideLog(k, l, false).catch(fail); },
   orderOk(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "given").catch(fail); },
   orderNo(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "refused").catch(fail); },
+  repair(id) {
+    const k = myKid(), fee = k.log.find(x => x.id === id); if (!fee) return;
+    submitTask(k, { id: "repair-" + fee.id, title: "Ремонт: " + fee.repair, kind: "repair", stars: fee.stars }).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail);
+  },
+  addRule() {
+    const v = val("ruTitle").trim(); if (!v) return;
+    saveRules(S.shared.rules.concat([{ id: uid(), title: v, cost: Math.max(1, Math.min(FEE_CAP_ONCE, +val("ruCost") || 1)), repair: val("ruRepair").trim() }])).then(() => { ["ruTitle", "ruRepair"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); }).catch(fail);
+  },
+  delRule(id) { saveRules(S.shared.rules.filter(r => r.id !== id)).catch(fail); },
+  seedRules() { seedRules().catch(fail); },
+  saveGoal() { const c = Math.max(0, Math.min(500, +val("potCost") || 0)); saveGoal(val("potGoal").trim().slice(0, 40), c).then(() => toast(t("Цель сохранена"))).catch(fail); },
+  potAdd(n) { adjustPot(+n).then(() => toast(tf("В копилку добавлено {n} ★", { n }))).catch(fail); },
+  potReset() { resetPot().then(() => toast(t("Копилка обнулена"))).catch(fail); },
+  applyRule() {
+    const k = parentKid(ui.pk), r = S.shared.rules.find(x => x.id === (val("applyRule") || ui.ruleId)) || S.shared.rules[0]; if (!k || !r) return;
+    applyRule(k, r).then(plan => toast(plan.kind === "fee" ? tf("В копилку ушло {n} ★", { n: plan.amount }) : t("Напоминание отправлено"))).catch(fail);
+  },
+  ruleUndo(id) { const k = parentKid(ui.pk), l = k && k.log.find(x => x.id === id); if (l) undoRule(k, l).then(() => toast(t("Отменено"))).catch(fail); },
   bonusPick(n) { ui.bonusN = +n; render(); },
   bonusGive() {
     const k = parentKid(ui.pk); if (!k) return; const why = val("bonusWhy").trim().slice(0, 60), n = ui.bonusN;
@@ -194,6 +213,7 @@ function recalcStars() {
 document.addEventListener("input", e => { if (e.target.id === "ntMin") recalcStars(); });
 document.addEventListener("change", e => {
   if (e.target.id === "ntHard") recalcStars();
+  if (e.target.id === "applyRule") { ui.ruleId = e.target.value; const k = parentKid(ui.pk), r = S.shared.rules.find(x => x.id === ui.ruleId), box = $("#rulePreview"); if (k && r && box) box.innerHTML = V.rulePreview(k, r); return; }
   const tg = e.target;
   if (tg.id === "petName") { const k = myKid(); savePet(k, Object.assign({}, k.pet, { name: tg.value.trim().slice(0, 14) || "Рыжик" })).catch(fail); }
   else if (tg.id === "nrTier") { if (tg.value) { const c = $("#nrCost"); if (c) c.value = tg.value; } }
