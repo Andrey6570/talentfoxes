@@ -1,0 +1,11 @@
+{
+  "appId": "com.andrey.talantfoxes",
+  "appName": "Talent Foxes",
+  "webDir": "dist",
+  "plugins": {
+    "FirebaseAuthentication": {
+      "skipNativeAuth": true,
+      "providers": ["google.com"]
+    }
+  }
+}

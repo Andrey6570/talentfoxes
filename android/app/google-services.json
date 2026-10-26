@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1015672797088",
+    "project_id": "talent-foxes",
+    "storage_bucket": "talent-foxes.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1015672797088:android:0e8e0040eceeb71636d6c5",
+        "android_client_info": {
+          "package_name": "com.andrey.talantfoxes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1015672797088-gcfvrle8dn3soqts63v1gp8ui94191ej.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCH9X1Yl2ssD4B9WiqnnMZnzkvhpsIuStI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1015672797088-gcfvrle8dn3soqts63v1gp8ui94191ej.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
