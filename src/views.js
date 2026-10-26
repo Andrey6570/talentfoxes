@@ -1,7 +1,7 @@
 import { t, tf, pl, disp, getLang } from "./i18n.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
-import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today } from "./domain.js";
+import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
 
 import { esc } from "./util.js";
 export { esc };
@@ -134,6 +134,12 @@ export function vShop(k) {
 }
 
 // ---------- parent cabinet ----------
+function rewardNote(k, cost) {
+  const d = daysToEarn(k, cost), v = priceVerdict(k, cost);
+  const days = d < 1.5 ? t("≈ 1 дня заработка") : tf("≈ {n} дн. заработка", { n: Math.round(d) });
+  const flag = v === "cheap" ? ` · <b class="flag">${t("дешевле одного дня")}</b>` : v === "dear" ? ` · <b class="flag">${t("очень дорого")}</b>` : "";
+  return `${cost}★ · ${days}${flag}`;
+}
 export function vParent(M, ui) {
   const kids = M.kids, fam = M.family;
   const pendLogs = [], pendOrders = [];
@@ -176,15 +182,29 @@ export function vParent(M, ui) {
       <div class="chart">${wk.map(d => { const tot = d.move + d.clean; return `<div class="col"><span>${tot || ""}</span><div class="stack" style="height:${Math.round(tot / max * 90)}px"><i style="height:${tot ? d.move / tot * 100 : 0}%;background:var(--move)"></i><i style="height:${tot ? d.clean / tot * 100 : 0}%;background:var(--clean)"></i></div><span class="muted">${t(d.wd)}</span></div>`; }).join("")}</div>
       <div class="legend"><span><b style="background:var(--move)"></b>${t("Движение")}</span><span><b style="background:var(--clean)"></b>${t("Уборка")}</span></div>
       <div class="muted">${tf("Подтверждённых заданий в день. Всего звёзд заработано: {n}.", { n: k.total })} ${tf("Сейчас на счёте: {n}.", { n: k.stars })}</div></div>
+    <div class="card"><h3>${t("Экономика звёзд")}</h3>
+      <div class="muted">${t("Сколько заданий в день вы ждёте от ребёнка?")}</div>
+      <div class="pills" style="justify-content:flex-start">${[2, 3, 4].map(n => `<button class="pill ${k.economy.tasksPerDay === n ? "on" : ""}" data-act="econTasks" data-id="${n}">${n}</button>`).join("")}</div>
+      <div class="muted">${t("1 звезда — это примерно столько минут усилий:")}</div>
+      <div class="pills" style="justify-content:flex-start">${[5, 10, 15].map(n => `<button class="pill ${k.economy.minutesPerStar === n ? "on" : ""}" data-act="econMinutes" data-id="${n}">${tf("{n} мин", { n })}</button>`).join("")}</div>
+      <div class="econ"><b>${tf("≈ {d} ★ в день, ≈ {w} ★ в неделю", { d: Math.round(dailyStars(k) * 10) / 10, w: Math.round(dailyStars(k) * 7) })}</b></div>
+      <div class="muted">${t("Ориентир цен на награды:")}</div>
+      <div class="ladder">${TIERS.map(x => `<div class="rung"><span>${t(x.name)}</span><b>${tierPrice(k, x)} ★</b><span class="muted">${tf("≈ {n} дн.", { n: x.days })}</span></div>`).join("")}</div>
+      <div class="hint">${tf("Расчёт: {n} задания в день × типичные {s} ★ × 70% (ребёнок делает не всё).", { n: k.economy.tasksPerDay, s: Math.round(typicalStars(k) * 10) / 10 })}</div></div>
     <div class="card"><h3>${t("Задания")}</h3>
       ${k.tasks.map(x => `<div class="pending"><div class="grow">${esc(x.icon || "")} ${esc(disp(x.title))}<div class="muted">${tf(x.kind === "move" ? "Движение · {n}★" : "Уборка · {n}★", { n: x.stars })}</div></div><button class="nobtn" data-act="delTask" data-id="${esc(x.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
       <div class="formrow"><input class="full" type="text" id="ntTitle" placeholder="${t("Новое задание")}" maxlength="60" aria-label="${t("Новое задание")}">
-        <select id="ntKind" aria-label="${t("Задания")}"><option value="move">${t("Движение")}</option><option value="clean">${t("Уборка")}</option></select>
-        <input type="number" id="ntStars" min="1" max="10" value="2" aria-label="${t("Звёзд")}"><button class="btn small full" data-act="addTask">${t("Добавить задание")}</button></div></div>
+        <select id="ntKind" aria-label="${t("Тип задания")}"><option value="move">${t("Движение")}</option><option value="clean">${t("Уборка")}</option></select>
+        <select id="ntHard" aria-label="${t("Сложность")}">${HARDNESS.map(h => `<option value="${h.id}" ${h.id === "normal" ? "selected" : ""}>${t(h.name)}</option>`).join("")}</select>
+        <input type="number" id="ntMin" min="1" max="120" placeholder="${t("Минут")}" aria-label="${t("Сколько минут")}">
+        <input type="number" id="ntStars" min="1" max="10" value="2" aria-label="${t("Звёзд")}">
+        <button class="btn small ghost full" data-act="suggestStars">${t("Подсказать звёзды по минутам и сложности")}</button>
+        <button class="btn small full" data-act="addTask">${t("Добавить задание")}</button></div></div>
     <div class="card"><h3>${t("Награды")}</h3>
-      ${k.rewards.map(r => `<div class="pending"><div class="grow">${esc(r.icon || "🎁")} ${esc(t(r.title))}<div class="muted">${r.cost}★</div></div><button class="nobtn" data-act="delReward" data-id="${esc(r.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
+      ${k.rewards.map(r => `<div class="pending"><div class="grow">${esc(r.icon || "🎁")} ${esc(t(r.title))}<div class="muted">${rewardNote(k, r.cost)}</div></div><button class="nobtn" data-act="delReward" data-id="${esc(r.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
       <div class="formrow"><input class="full" type="text" id="nrTitle" placeholder="${t("Новая награда")}" maxlength="60" aria-label="${t("Новая награда")}">
-        <input type="number" id="nrCost" min="1" max="500" value="20" aria-label="${t("Цена в звёздах")}"><button class="btn small" data-act="addReward">${t("Добавить")}</button></div></div>
+        <select id="nrTier" class="full" aria-label="${t("Размер впечатления")}">${TIERS.map(x => `<option value="${tierPrice(k, x)}">${t(x.name)} · ${tierPrice(k, x)} ★</option>`).join("")}<option value="">${t("Своя цена")}</option></select>
+        <input type="number" id="nrCost" min="1" max="500" value="${tierPrice(k, TIERS[0])}" aria-label="${t("Цена в звёздах")}"><button class="btn small" data-act="addReward">${t("Добавить")}</button></div></div>
     <div class="card"><h3>${t("Плейлисты")}</h3><div class="muted">${t("Вставьте ссылку на плейлист из приложения: «Поделиться» → «Копировать ссылку».")}</div>
       <input type="text" id="plSp" value="${esc(k.playlists.spotify)}" placeholder="https://open.spotify.com/playlist/…" aria-label="${t("Ссылка Spotify")}">
       <input type="text" id="plYm" value="${esc(k.playlists.yandex)}" placeholder="https://music.yandex.ru/users/…/playlists/…" aria-label="${t("Ссылка Яндекс Музыки")}">

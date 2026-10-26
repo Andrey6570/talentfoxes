@@ -141,6 +141,7 @@ export async function deleteKid(kid) {
 export const renameKid = (kid, name) => updateDoc(kidRef(kid.id), { name });
 export const saveTasks = (kid, tasks) => updateDoc(kidRef(kid.id), { tasks });
 export const saveRewards = (kid, rewards) => updateDoc(kidRef(kid.id), { rewards });
+export const saveEconomy = (kid, economy) => updateDoc(kidRef(kid.id), { economy });
 export const savePlaylists = (kid, playlists) => updateDoc(kidRef(kid.id), { playlists });
 
 // ---- approvals (parent) ----

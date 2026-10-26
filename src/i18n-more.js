@@ -13,5 +13,15 @@ export const EN_MORE = {
   "Нужно имя и логин": "A name and a login are required", "Нет доступа. Войдите заново.": "No access. Please sign in again.", "Нет связи с интернетом": "No internet connection",
   "Не получилось": "Something went wrong", "Выйти": "Sign out", "Загрузка…": "Loading…", "Не удалось открыть профиль": "Could not open the profile",
   "Данные сохраняются в вашей семье и доступны на других устройствах": "Data is saved in your family and available on other devices", "Сохранено": "Saved",
-  "Персонаж": "Character", "Лисёнок": "Fox cub", "Котёнок": "Kitten", "Дракончик": "Little dragon", "Скоро": "Coming soon", "Выбран": "Selected"
+  "Персонаж": "Character", "Лисёнок": "Fox cub", "Котёнок": "Kitten", "Дракончик": "Little dragon", "Скоро": "Coming soon", "Выбран": "Selected",
+  "Экономика звёзд": "Star economy", "Сколько заданий в день вы ждёте от ребёнка?": "How many tasks a day do you expect from your child?",
+  "1 звезда — это примерно столько минут усилий:": "1 star is roughly this many minutes of effort:",
+  "≈ {d} ★ в день, ≈ {w} ★ в неделю": "≈ {d} ★ a day, ≈ {w} ★ a week", "Ориентир цен на награды:": "Reward price guide:",
+  "Мелкое": "Small", "Среднее": "Medium", "Крупное": "Large", "≈ {n} дн.": "≈ {n} days",
+  "Расчёт: {n} задания в день × типичные {s} ★ × 70% (ребёнок делает не всё).": "How it is worked out: {n} tasks a day × a typical {s} ★ × 70% (a child does not finish everything).",
+  "Тип задания": "Task type", "Сложность": "Difficulty", "Минут": "Minutes", "Сколько минут": "How many minutes",
+  "Легко": "Easy", "Обычно": "Normal", "Тяжело": "Hard", "Неприятно": "Unpleasant",
+  "Подсказать звёзды по минутам и сложности": "Suggest stars from minutes and difficulty", "Укажите, сколько минут занимает задание": "Enter how many minutes the task takes", "Подходит: {n} ★": "Suggested: {n} ★",
+  "Размер впечатления": "Size of the treat", "Своя цена": "Custom price",
+  "≈ 1 дня заработка": "≈ 1 day of earnings", "≈ {n} дн. заработка": "≈ {n} days of earnings", "дешевле одного дня": "cheaper than a day", "очень дорого": "very expensive"
 };

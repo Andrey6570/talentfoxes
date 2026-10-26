@@ -1,9 +1,9 @@
 import "./styles.css";
-import { t, getLang, toggleLang } from "./i18n.js";
+import { t, tf, getLang, toggleLang } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
-import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid } from "./domain.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars } from "./domain.js";
 
 const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
@@ -138,6 +138,13 @@ const A = {
   orderOk(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "given").catch(fail); },
   orderNo(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "refused").catch(fail); },
   bonus(n) { const k = parentKid(ui.pk); if (k) giveBonus(k, +n).then(() => toast(t("Бонус отправлен"))).catch(fail); },
+  econTasks(n) { const k = parentKid(ui.pk); if (k) saveEconomy(k, Object.assign({}, k.economy, { tasksPerDay: +n })).catch(fail); },
+  econMinutes(n) { const k = parentKid(ui.pk); if (k) saveEconomy(k, Object.assign({}, k.economy, { minutesPerStar: +n })).catch(fail); },
+  suggestStars() {
+    const k = parentKid(ui.pk), m = +val("ntMin"); if (!k) return;
+    if (!m || m < 1) return toast(t("Укажите, сколько минут занимает задание"));
+    const n = taskStars(k, m, val("ntHard")); $("#ntStars").value = n; toast(tf("Подходит: {n} ★", { n }));
+  },
   addTask() {
     const k = parentKid(ui.pk), v = val("ntTitle").trim(); if (!k || !v) return; const kind = val("ntKind");
     saveTasks(k, k.tasks.concat([{ id: uid(), title: v, kind, stars: Math.max(1, Math.min(10, +val("ntStars") || 1)), icon: kind === "move" ? "🏃" : "🧹" }])).then(() => { const el = $("#ntTitle"); if (el) el.value = ""; }).catch(fail);
@@ -167,6 +174,7 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   const tg = e.target;
   if (tg.id === "petName") { const k = myKid(); savePet(k, Object.assign({}, k.pet, { name: tg.value.trim().slice(0, 14) || "Рыжик" })).catch(fail); }
+  else if (tg.id === "nrTier") { if (tg.value) { const c = $("#nrCost"); if (c) c.value = tg.value; } }
   else if (tg.dataset && tg.dataset.kidname) { const k = parentKid(tg.dataset.kidname), v = tg.value.trim(); if (k && v) renameKid(k, v.slice(0, 20)).catch(fail); }
 });
 document.addEventListener("keydown", e => { if (e.key === "Enter" && (e.target.id === "kPw")) A.kidLogin(); });

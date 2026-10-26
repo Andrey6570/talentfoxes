@@ -63,7 +63,7 @@ export const defaultRewards = () => [
 export const newKidDoc = (name, login, kidUid) => ({
   name, login, kidUid, authVersion: 0, accent: "violet",
   pet: { name: "Рыжик", character: "fox", color: "fox", equipped: [], owned: [] },
-  tasks: defaultTasks(), rewards: defaultRewards(), playlists: { spotify: "", yandex: "" },
+  tasks: defaultTasks(), rewards: defaultRewards(), playlists: { spotify: "", yandex: "" }, economy: { tasksPerDay: 4, minutesPerStar: 10 },
   streak: 0, freezes: 1, lastActive: null, createdAt: Date.now()
 });
 
@@ -76,6 +76,7 @@ export function derive(doc, log, orders) {
   return Object.assign({}, doc, {
     pet: Object.assign({}, base.pet, doc.pet || {}),
     playlists: Object.assign({}, base.playlists, doc.playlists || {}),
+    economy: Object.assign({}, base.economy, doc.economy || {}),
     tasks: doc.tasks || [], rewards: doc.rewards || [],
     log, orders, total, stars: total - spent
   });
@@ -131,3 +132,29 @@ export const normCode = s => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 export const kidEmail = (login, code, v, domain) => `${login}${v > 0 ? "v" + v : ""}__${code}@${domain}`;
 const ALPHA = "abcdefghjkmnpqrstuvwxyz23456789";
 export function newInviteCode() { let s = ""; const a = new Uint32Array(8); crypto.getRandomValues(a); a.forEach(n => { s += ALPHA[n % ALPHA.length]; }); return s; }
+
+// ---- economy ----
+// 1 star is about `minutesPerStar` minutes of effort. A reward is priced in days of typical earnings, so the
+// price scale follows what this child really earns and needs no money amounts.
+export const SUCCESS_RATE = 0.7; // share of the expected tasks a child really completes
+export const HARDNESS = [
+  { id: "easy", name: "Легко", f: 1 }, { id: "normal", name: "Обычно", f: 1.25 },
+  { id: "hard", name: "Тяжело", f: 1.5 }, { id: "yuck", name: "Неприятно", f: 1.75 }
+];
+export const TIERS = [
+  { id: "small", name: "Мелкое", days: 2 }, { id: "medium", name: "Среднее", days: 7 }, { id: "large", name: "Крупное", days: 30 }
+];
+export function typicalStars(k) {
+  const a = k.tasks.map(x => x.stars).sort((x, y) => x - y);
+  if (!a.length) return 2;
+  return a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2;
+}
+export const dailyStars = k => k.economy.tasksPerDay * typicalStars(k) * SUCCESS_RATE;
+export const roundTidy = n => n < 20 ? Math.max(1, Math.round(n)) : Math.round(n / 5) * 5;
+export const tierPrice = (k, tier) => roundTidy(dailyStars(k) * tier.days);
+export function taskStars(k, minutes, hardId) {
+  const f = (HARDNESS.find(h => h.id === hardId) || HARDNESS[1]).f;
+  return Math.max(1, Math.min(10, Math.round(minutes / k.economy.minutesPerStar * f)));
+}
+export const daysToEarn = (k, cost) => { const d = dailyStars(k); return d > 0 ? cost / d : 0; };
+export const priceVerdict = (k, cost) => { const d = daysToEarn(k, cost); return d < 1 ? "cheap" : d > 45 ? "dear" : "ok"; };

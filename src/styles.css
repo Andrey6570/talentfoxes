@@ -193,3 +193,10 @@ label.muted { margin-bottom: -6px; }
 .char[disabled] { opacity: .55; cursor: default; }
 .char .cn { font-family: var(--f-display); font-size: 16px; overflow-wrap: anywhere; text-align: center; }
 .char .cs { font-size: 12px; color: var(--muted); }
+
+/* economy */
+.econ { background: var(--surface2); border-radius: 14px; padding: 10px 12px; font-size: 17px; }
+.ladder { display: flex; flex-direction: column; gap: 6px; }
+.rung { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.rung:first-child { border-top: 0; }
+.flag { color: var(--bad); font-weight: 800; }
