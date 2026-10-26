@@ -12,5 +12,6 @@ export const EN_MORE = {
   "Такого кода нет": "No such code", "Пароль не короче 6 символов": "The password needs at least 6 characters", "Такой логин уже занят": "This login is already taken",
   "Нужно имя и логин": "A name and a login are required", "Нет доступа. Войдите заново.": "No access. Please sign in again.", "Нет связи с интернетом": "No internet connection",
   "Не получилось": "Something went wrong", "Выйти": "Sign out", "Загрузка…": "Loading…", "Не удалось открыть профиль": "Could not open the profile",
-  "Данные сохраняются в вашей семье и доступны на других устройствах": "Data is saved in your family and available on other devices", "Сохранено": "Saved"
+  "Данные сохраняются в вашей семье и доступны на других устройствах": "Data is saved in your family and available on other devices", "Сохранено": "Saved",
+  "Персонаж": "Character", "Лисёнок": "Fox cub", "Котёнок": "Kitten", "Дракончик": "Little dragon", "Скоро": "Coming soon", "Выбран": "Selected"
 };

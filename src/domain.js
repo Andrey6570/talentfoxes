@@ -62,7 +62,7 @@ export const defaultRewards = () => [
 ];
 export const newKidDoc = (name, login, kidUid) => ({
   name, login, kidUid, authVersion: 0, accent: "violet",
-  pet: { name: "Рыжик", color: "fox", equipped: [], owned: [] },
+  pet: { name: "Рыжик", character: "fox", color: "fox", equipped: [], owned: [] },
   tasks: defaultTasks(), rewards: defaultRewards(), playlists: { spotify: "", yandex: "" },
   streak: 0, freezes: 1, lastActive: null, createdAt: Date.now()
 });

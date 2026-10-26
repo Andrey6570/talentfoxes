@@ -1,5 +1,6 @@
 import { t, tf, pl, disp, getLang } from "./i18n.js";
-import { fox } from "./fox.js";
+import { drawPet } from "./characters.js";
+import { CHARACTERS, characterOf } from "./characters.js";
 import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today } from "./domain.js";
 
 import { esc } from "./util.js";
@@ -29,7 +30,7 @@ export function vWelcome(ui) {
       <div class="row"><button class="btn ghost grow" data-act="welcomeBack">${t("Назад")}</button><button class="btn grow" data-act="kidLogin" ${ui.busy ? "disabled" : ""}>${t("Войти")}</button></div>
       <div class="hint">${t("Код семьи и логин вам скажут родители.")}</div></div>`;
   }
-  return `<div class="card petcard" style="padding-block:24px"><div class="stage">${fox(demo, "pet", "Talent Foxes")}</div>
+  return `<div class="card petcard" style="padding-block:24px"><div class="stage">${drawPet(demo, "pet", "Talent Foxes")}</div>
       <h2>Talent Foxes</h2><div class="muted">${t("Двигайся, наводи порядок и расти питомца")}</div></div>
     ${errBox(ui.err)}
     <button class="btn" data-act="parentLogin" ${ui.busy ? "disabled" : ""}>${t("Я родитель: войти через Google")}</button>
@@ -64,7 +65,7 @@ export function vHome(k) {
   const lv = level(k), m = mood(k), sk = aliveStreak(k), says = SAYS[m], say = says[new Date().getDate() % says.length], links = musicLinks(k);
   const label = tf(m === "happy" ? "{pet}, настроение: радостное" : m === "ok" ? "{pet}, настроение: спокойное" : "{pet}, настроение: скучает", { pet: k.pet.name });
   return `<div class="card petcard">
-      <div class="stage">${fox(k, "pet", label)}</div><div class="bubble" id="bubble">${esc(t(say))}</div>
+      <div class="stage">${drawPet(k, "pet", label)}</div><div class="bubble" id="bubble">${esc(t(say))}</div>
       <div class="namerow"><input id="petName" type="text" maxlength="14" value="${esc(k.pet.name === "Рыжик" ? t("Рыжик") : k.pet.name)}" aria-label="${t("Имя питомца")}"></div>
       <div class="colors" role="group" aria-label="${t("Цвет питомца")}">${COLORS.map(c => `<button class="dot ${c.id === k.pet.color ? "on" : ""}" style="background:${c.main}" data-act="color" data-id="${c.id}" aria-label="${c.id}"></button>`).join("")}</div>
       <div class="muted">${t("Цвет темы")}</div>
@@ -77,6 +78,8 @@ export function vHome(k) {
       <div class="muted">${lv.toNext ? tf("До следующего уровня: {n} {w}", { n: lv.toNext, w: pl(lv.toNext, "звезда|звезды|звёзд", "star|stars") }) : t("Это самый высокий уровень!")}</div>
       <div class="streak"><span class="chip">${tf("🔥 {n} {w} подряд", { n: sk, w: pl(sk, "день|дня|дней", "day|days") })}</span><span class="chip">${tf("❄️ Заморозок: {n}", { n: k.freezes })}</span></div>
       <div class="muted" style="text-align:center">${t("Заморозка спасает серию, если пропустить один день. Новая даётся за каждые 7 дней подряд.")}</div></div>
+    <div class="card"><h3>${t("Персонаж")}</h3>
+      <div class="chars" role="group" aria-label="${t("Персонаж")}">${CHARACTERS.map(c => `<button class="char ${c.available && c.id === characterOf(k).id ? "on" : ""}" data-act="character" data-id="${c.id}" ${c.available ? "" : "disabled"}><span class="cn">${t(c.name)}</span><span class="cs">${c.available ? (c.id === characterOf(k).id ? t("Выбран") : t("Выбрать")) : t("Скоро")}</span></button>`).join("")}</div></div>
     <div class="card"><h3>${t("Музыка для дел")}</h3>${links ? `<div class="muted">${t("Включить плейлист:")}</div><div class="music">${links}</div>` : `<div class="muted">${t("Родители ещё не добавили плейлист.")}</div>`}</div>`;
 }
 

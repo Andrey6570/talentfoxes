@@ -111,6 +111,7 @@ const A = {
 
   // child
   tab(id) { ui.tab = id; render(); window.scrollTo(0, 0); },
+  character(id) { const k = myKid(); savePet(k, Object.assign({}, k.pet, { character: id })).catch(fail); },
   color(id) { const k = myKid(); savePet(k, Object.assign({}, k.pet, { color: id })).catch(fail); },
   accent(id) { saveAccent(myKid(), id).catch(fail); },
   submit(id) { const k = myKid(), tk = k.tasks.concat([zoneTask()]).find(x => x.id === id); if (tk) submitTask(k, tk).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail); },
