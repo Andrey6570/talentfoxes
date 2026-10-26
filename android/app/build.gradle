@@ -3,8 +3,8 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.andrey.talantfoxes"
     compileSdk = rootProject.ext.compileSdkVersion
-    // The signing key is not stored in the repository. CI restores it from the KEYSTORE_BASE64 secret.
-    // Without it the build falls back to the default debug key (Google sign-in will not work with that key).
+    // One fixed key signs debug and release builds, so the SHA-1 registered in Firebase never changes.
+    // The key is committed on purpose for sideloaded family use; do not reuse it for a store listing.
     def keystoreFile = file('talentfoxes.jks')
     signingConfigs {
         family {
