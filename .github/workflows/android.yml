@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -52,3 +55,16 @@ jobs:
           name: talent-foxes-apk
           path: android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+
+      - name: Publish the APK as the latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK=$(ls android/app/build/outputs/apk/*/*.apk | head -1)
+          cp "$APK" talent-foxes.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest talent-foxes.apk \
+            --title "Talent Foxes, сборка №${GITHUB_RUN_NUMBER}" \
+            --notes "Сборка из коммита ${GITHUB_SHA::7}. Скачайте talent-foxes.apk и установите." \
+            --target "$GITHUB_SHA"

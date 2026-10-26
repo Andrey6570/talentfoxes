@@ -10,7 +10,8 @@
 ## Как это устроено
 
 Веб-приложение на Vite и обычном JavaScript, упаковано в Android через Capacitor. APK собирает GitHub Actions
-(`.github/workflows/android.yml`): откройте вкладку **Actions**, выберите последний запуск и скачайте артефакт `talent-foxes-apk`.
+(`.github/workflows/android.yml`). Готовый APK каждый раз публикуется на странице
+[Releases / latest](https://github.com/Andrey6570/talentfoxes/releases/latest): откройте её на телефоне и скачайте `talent-foxes.apk`.
 
 ```
 src/             интерфейс и логика
