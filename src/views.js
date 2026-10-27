@@ -1,4 +1,4 @@
-import { t, tf, pl, disp, getLang } from "./i18n.js";
+import { t, tf, pl, disp, getLang, locale, LANGS } from "./i18n.js";
 import { LEGAL_URL } from "./config.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
@@ -20,7 +20,7 @@ export const TABS = [
 
 export const legalLinks = () => {
   if (!LEGAL_URL) return "";
-  const l = getLang();
+  const l = getLang() === "ru" ? "ru" : "en"; // Greek pages are not written yet
   return `<a href="${LEGAL_URL}privacy-${l}.html" target="_blank" rel="noopener noreferrer">${t("Политика конфиденциальности")}</a> · <a href="${LEGAL_URL}terms-${l}.html" target="_blank" rel="noopener noreferrer">${t("Условия использования")}</a>`;
 };
 const consentBox = (id, text) => `<label class="check"><input type="checkbox" id="${id}"><span>${text}</span></label>`;
@@ -190,7 +190,7 @@ export function vShop(k) {
 // ---------- calendar ----------
 const tzName = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return ""; } };
 export function dayLabel(day, withRelative = true) {
-  const l = getLang() === "ru" ? "ru" : "en-GB", d = parseDay(day), now = fmtDay(new Date());
+  const l = locale(), d = parseDay(day), now = fmtDay(new Date());
   const base = new Intl.DateTimeFormat(l, { weekday: "short", day: "numeric", month: "short" }).format(d);
   if (!withRelative) return base;
   return day === now ? t("Сегодня") + ", " + base : day === addDays(now, 1) ? t("Завтра") + ", " + base : base;
@@ -338,13 +338,13 @@ export function vParent(M, ui) {
       <div class="muted">${tf("Подтверждённых заданий в день. Всего звёзд заработано: {n}.", { n: k.total })} ${tf("Сейчас на счёте: {n}.", { n: k.stars })}</div></div>
     <div class="card"><h3>${t("Экономика звёзд")}</h3>
       <div class="muted">${t("Сколько заданий в день вы ждёте от ребёнка?")}</div>
-      <div class="pills" style="justify-content:flex-start">${[2, 3, 4].map(n => `<button class="pill ${k.economy.tasksPerDay === n ? "on" : ""}" data-act="econTasks" data-id="${n}">${n}</button>`).join("")}</div>
+      <div class="pills" style="justify-content:flex-start">${[...new Set([2, 4, 6, 8, 10, k.economy.tasksPerDay])].sort((a, b) => a - b).map(n => `<button class="pill ${k.economy.tasksPerDay === n ? "on" : ""}" data-act="econTasks" data-id="${n}">${n}</button>`).join("")}</div>
       <div class="muted">${t("1 звезда — это примерно столько минут усилий:")}</div>
       <div class="pills" style="justify-content:flex-start">${[5, 10, 15].map(n => `<button class="pill ${k.economy.minutesPerStar === n ? "on" : ""}" data-act="econMinutes" data-id="${n}">${tf("{n} мин", { n })}</button>`).join("")}</div>
       <div class="econ"><b>${tf("≈ {d} ★ в день, ≈ {w} ★ в неделю", { d: Math.round(dailyStars(k) * 10) / 10, w: Math.round(dailyStars(k) * 7) })}</b><div class="muted">${tf("Это примерно {n} мин усилий в день", { n: Math.round(dailyMinutes(k) / 5) * 5 })}</div></div>
       <div class="muted">${t("Ориентир цен на награды:")}</div>
       <div class="ladder">${TIERS.map(x => `<div class="rung"><span>${t(x.name)}</span><b>${tierPrice(k, x)} ★</b><span class="muted">${tf("≈ {n} дн.", { n: x.days })}</span></div>`).join("")}</div>
-      <div class="hint">${tf("Расчёт: {n} задания в день × типичные {s} ★ × 70% (ребёнок делает не всё).", { n: k.economy.tasksPerDay, s: Math.round(typicalStars(k) * 10) / 10 })}</div></div>
+      <div class="hint">${tf("Расчёт: {n} {w} в день × типичные {s} ★ × 70% (ребёнок делает не всё).", { n: k.economy.tasksPerDay, w: pl(k.economy.tasksPerDay, "задание|задания|заданий", "task|tasks"), s: Math.round(typicalStars(k) * 10) / 10 })}</div></div>
     <div class="card"><h3>${t("Готовые наборы заданий")}</h3>
       <div class="muted">${t("Звёзды подобраны по минутам и по настройкам экономики этого ребёнка. Галочками отметьте, что добавить.")}</div>
       <div class="pills" style="justify-content:flex-start" role="group" aria-label="${t("Возраст")}">${AGES.map(a => `<button class="pill ${ui.packAge === a.id ? "on" : ""}" data-act="packAge" data-id="${a.id}">${t(a.name)}</button>`).join("")}</div>
@@ -352,7 +352,7 @@ export function vParent(M, ui) {
       <button class="btn small" data-act="addPackTasks">${t("Добавить выбранные задания")}</button>
       <h3 style="margin-top:6px">${t("Готовые награды")}</h3>
       <div class="muted">${t("Цены считаются от заработка ребёнка: мелкое примерно 2 дня, среднее неделя, крупное месяц.")}</div>
-      <div class="ladder">${packRewards(k).map(r => `<div class="rung"><span>${esc(r.icon)} ${esc(t(r.title))}</span><b>${r.cost} ★</b><span class="muted">${k.rewards.some(x => x.id === r.id) ? t("уже добавлено") : ""}</span></div>`).join("")}</div>
+      <div class="ladder">${packRewards(k, ui.packAge).map(r => `<div class="rung"><span>${esc(r.icon)} ${esc(t(r.title))}</span><b>${r.cost} ★</b><span class="muted">${k.rewards.some(x => x.id === r.id) ? t("уже добавлено") : ""}</span></div>`).join("")}</div>
       <button class="btn small" data-act="addPackRewards">${t("Добавить готовые награды")}</button></div>
     <div class="card"><h3>${t("Задания")}</h3>
       ${k.tasks.map(x => taskRow(k, x, ui)).join("")}
@@ -382,7 +382,7 @@ export function vParent(M, ui) {
 export function vSettings(S, ui) {
   const pills = (act, cur, items) => `<div class="pills" style="justify-content:flex-start" role="group">${items.map(([id, name]) => `<button class="pill ${cur === id ? "on" : ""}" data-act="${act}" data-id="${id}">${name}</button>`).join("")}</div>`;
   return `<div class="in"><div class="row"><h2 class="grow">${t("Настройки")}</h2><button class="btn small ghost" data-act="closeSettings">${t("Закрыть")}</button></div>
-    <div class="card"><h3>${t("Язык")}</h3>${pills("setLang", getLang(), [["ru", "Русский"], ["en", "English"]])}</div>
+    <div class="card"><h3>${t("Язык")}</h3>${pills("setLang", getLang(), LANGS)}</div>
     <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}</div>
     ${S.user ? `<div class="card"><h3>${t("Уведомления")}</h3>${pills("setNotify", ui.notify ? "on" : "off", [["on", t("Включены")], ["off", t("Выключены")]])}
       <div class="hint">${t("Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.")}</div></div>` : ""}

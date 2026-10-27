@@ -1,5 +1,5 @@
 // Russian is the source language and the key. English comes from this table; a missing key shows the Russian text.
-const EN = {
+export const EN = {
   "Питомец": "Pet", "Задания": "Tasks", "Колесо": "Wheel", "Магазин": "Shop",
   "Кто играет?": "Who is playing?", "Родители": "Parents", "Введите пароль": "Enter password", "Пароль": "Password", "Войти": "Sign in", "Назад": "Back",
   "Неверный пароль": "Wrong password", "Ребёнок": "Kid", "Выбрать": "Choose", "под паролем": "password protected",
@@ -59,17 +59,24 @@ const EN = {
 };
 
 import { EN_MORE } from "./i18n-more.js";
+import { EL } from "./i18n-el.js";
 Object.assign(EN, EN_MORE);
 
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
-let lang = LS.get("talent-foxes-lang") || ((navigator.language || "ru").toLowerCase().indexOf("ru") === 0 ? "ru" : "en");
+// Russian is the source text. English and Greek are looked up by it; a missing Greek line falls back to English.
+export const LANGS = [["ru", "Русский"], ["en", "English"], ["el", "Ελληνικά"]];
+const guess = () => { const l = (navigator.language || "ru").toLowerCase(); return l.indexOf("ru") === 0 ? "ru" : l.indexOf("el") === 0 ? "el" : "en"; };
+let lang = LS.get("talent-foxes-lang");
+if (!LANGS.some(x => x[0] === lang)) lang = guess();
 
 export const getLang = () => lang;
-export function toggleLang() { lang = lang === "ru" ? "en" : "ru"; LS.set("talent-foxes-lang", lang); document.documentElement.lang = lang; return lang; }
-export const t = s => lang === "en" && EN[s] !== undefined ? EN[s] : s;
+export function setLang(id) { if (LANGS.some(x => x[0] === id)) { lang = id; LS.set("talent-foxes-lang", lang); document.documentElement.lang = lang; } return lang; }
+// locale for dates and numbers
+export const locale = () => lang === "ru" ? "ru" : lang === "el" ? "el-GR" : "en-GB";
+export const t = s => lang === "en" ? (EN[s] !== undefined ? EN[s] : s) : lang === "el" ? (EL[s] !== undefined ? EL[s] : EN[s] !== undefined ? EN[s] : s) : s;
 export const tf = (s, v) => t(s).replace(/\{(\w+)\}/g, (_, n) => v[n]);
 export const pl = (n, ru, en) => {
-  if (lang === "en") { const e = (EN[ru] || en).split("|"); return Math.abs(n) === 1 ? e[0] : e[1]; }
+  if (lang !== "ru") { const e = ((lang === "el" && EL[ru]) || EN[ru] || en).split("|"); return Math.abs(n) === 1 ? e[0] : e[1]; }
   const r = ru.split("|"), m = Math.abs(n) % 100, k = m % 10;
   return m > 10 && m < 20 ? r[2] : k > 1 && k < 5 ? r[1] : k === 1 ? r[0] : r[2];
 };

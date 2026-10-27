@@ -23,8 +23,8 @@ img { max-width: 100%; }
   --good: #1B8A4B;
   --bad: #C2325A;
   --shadow: 0 2px 0 rgba(30, 26, 60, .08), 0 8px 24px rgba(30, 26, 60, .08);
-  --f-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
-  --f-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-display: "Fredoka", "Noto Sans", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Nunito", "Noto Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

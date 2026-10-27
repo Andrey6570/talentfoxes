@@ -205,8 +205,8 @@ export async function addPackTasks(kid, ageId, ids) {
   if (add.length) await saveTasks(kid, kid.tasks.concat(add));
   return add.length;
 }
-export async function addPackRewards(kid) {
-  const have = new Set(kid.rewards.map(x => x.id)), add = packRewards(kid).filter(x => !have.has(x.id)).map(({ tier, ...x }) => x);
+export async function addPackRewards(kid, ageId) {
+  const have = new Set(kid.rewards.map(x => x.id)), add = packRewards(kid, ageId).filter(x => !have.has(x.id)).map(({ tier, ...x }) => x);
   if (add.length) await saveRewards(kid, kid.rewards.concat(add));
   return add.length;
 }

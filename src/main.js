@@ -1,5 +1,5 @@
 import "./styles.css";
-import { t, tf, getLang, toggleLang, disp } from "./i18n.js";
+import { t, tf, getLang, setLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
   saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
@@ -192,7 +192,7 @@ function equipList(k, id) {
 const A = {
   openSettings() { ui.settings = true; render(); },
   closeSettings() { ui.settings = false; render(); },
-  setLang(id) { if (getLang() !== id) toggleLang(); render(); },
+  setLang(id) { setLang(id); render(); },
   setNotify(id) { ui.notify = id === "on"; LS.set(NOTIFY_KEY, id); if (ui.notify) { LS.set(ASKED_KEY, ""); askNotifyPermission(); } render(); },
   setTheme(id) { ui.theme = id; LS.set(THEME_KEY, id); applyTheme(); render(); },
   signout() { cancelTimerEnd(); ui.settings = false; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
@@ -273,7 +273,7 @@ const A = {
     if (!ids.length) return toast(t("Ничего нового не добавлено"));
     addPackTasks(k, ui.packAge, ids).then(n => toast(n ? tf("Добавлено заданий: {n}", { n }) : t("Ничего нового не добавлено"))).catch(fail);
   },
-  addPackRewards() { const k = parentKid(ui.pk); if (k) addPackRewards(k).then(n => toast(n ? tf("Добавлено наград: {n}", { n }) : t("Ничего нового не добавлено"))).catch(fail); },
+  addPackRewards() { const k = parentKid(ui.pk); if (k) addPackRewards(k, ui.packAge).then(n => toast(n ? tf("Добавлено наград: {n}", { n }) : t("Ничего нового не добавлено"))).catch(fail); },
   repair(id) {
     const k = myKid(), fee = k.log.find(x => x.id === id); if (!fee) return;
     submitTask(k, { id: "repair-" + fee.id, title: "Ремонт: " + fee.repair, kind: "repair", stars: fee.stars }).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail);

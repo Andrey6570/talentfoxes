@@ -228,7 +228,7 @@ export const speedPayload = r => ({ planned: r.planned, active: runActive(r), pa
 
 // ---- ready-made sets by age ----
 // Stars are not stored in the set: they are worked out from minutes and difficulty with each child's own economy.
-export const AGES = [{"id": "a5", "name": "5–7 лет"}, {"id": "a8", "name": "8–10 лет"}, {"id": "a11", "name": "11–13 лет"}];
+export const AGES = [{"id": "a5", "name": "5–7 лет"}, {"id": "a8", "name": "8–10 лет"}, {"id": "a11", "name": "11–13 лет"}, {"id": "a14", "name": "14–16 лет"}];
 const T = (title, kind, minutes, hard, icon, sel) => ({ title, kind, minutes, hard, icon, sel: !!sel });
 export const PACKS = {
   a5: [
@@ -255,6 +255,24 @@ export const PACKS = {
     T("Вынести мусор", "clean", 3, "normal", "🗑️", 1),
     T("Разложить чистую одежду по местам", "clean", 8, "normal", "👕", 0),
     T("Полная уборка комнаты", "clean", 40, "hard", "✨", 0)
+  ],
+  a14: [
+    T("Тренировка 40 минут", "move", 40, "normal", "🏋️", 1),
+    T("Пробежка 30 минут", "move", 30, "normal", "🏃", 1),
+    T("Растяжка или йога 15 минут", "move", 15, "easy", "🧘", 1),
+    T("Прогулка без телефона 30 минут", "move", 30, "easy", "🚶", 0),
+    T("Спорт или секция", "move", 60, "normal", "⚽", 0),
+    T("Велосипед, самокат или ролики", "move", 40, "easy", "🚴", 0),
+    T("Заправить кровать", "clean", 2, "easy", "🛏️", 1),
+    T("Собрать рюкзак на завтра", "clean", 5, "easy", "🎒", 1),
+    T("Убрать в комнате за 10 минут", "clean", 10, "normal", "🧹", 1),
+    T("Помыть посуду", "clean", 15, "normal", "🍽️", 1),
+    T("Вынести мусор", "clean", 3, "normal", "🗑️", 1),
+    T("Постирать и развесить свои вещи", "clean", 25, "hard", "👕", 0),
+    T("Приготовить обед или ужин", "clean", 45, "normal", "🍳", 0),
+    T("Сходить в магазин за продуктами", "clean", 30, "normal", "🛒", 0),
+    T("Помочь младшим с уроками или играми", "clean", 20, "normal", "🤝", 0),
+    T("Пропылесосить и протереть пыль", "clean", 25, "normal", "🧼", 0)
   ],
   a11: [
     T("Тренировка 30 минут", "move", 30, "normal", "🏋️", 1),
@@ -287,15 +305,27 @@ export const REWARD_PACK = [
   RW("Аквапарк, батут или каток", "large", 1.2, "🎢"),
   RW("Книга или игрушка на выбор", "large", 0.8, "🎁")
 ];
+export const REWARD_PACK_TEEN = [
+  RW("Выбрать фильм или сериал на вечер", "small", 1.0, "🎬"),
+  RW("Любимый перекус на выбор", "small", 0.7, "🍕"),
+  RW("Дополнительные 30 минут игр или соцсетей", "small", 1.2, "🎮"),
+  RW("Поход с друзьями в кафе", "medium", 1.0, "🧁"),
+  RW("Лечь спать на час позже в выходной", "medium", 0.8, "🌙"),
+  RW("Пригласить друзей в гости", "medium", 1.3, "🧑‍🤝‍🧑"),
+  RW("Поход в кино или на концерт с друзьями", "large", 1.0, "🍿"),
+  RW("Аквапарк, батут или каток", "large", 1.2, "🎢"),
+  RW("Небольшая покупка на выбор", "large", 0.8, "🎁")
+];
 // priced from the child's own earnings: a small treat is about 2 days of work, a medium one a week, a large one a month
-export function packRewards(k) {
-  return REWARD_PACK.map((r, i) => ({ id: "tplr-" + i, title: r.title, icon: r.icon, tier: r.tier, cost: Math.max(1, roundTidy(tierPrice(k, TIERS.find(x => x.id === r.tier)) * r.f)) }));
+export function packRewards(k, ageId) {
+  const teen = ageId === "a14", list = teen ? REWARD_PACK_TEEN : REWARD_PACK;
+  return list.map((r, i) => ({ id: (teen ? "tplt-" : "tplr-") + i, title: r.title, icon: r.icon, tier: r.tier, cost: Math.max(1, roundTidy(tierPrice(k, TIERS.find(x => x.id === r.tier)) * r.f)) }));
 }
 // starting tasks and rewards for a new child of this age
 export function starterKit(ageId, economy) {
   if (!PACKS[ageId]) return null;
   const tasks = packTasks(ageId, economy).filter(x => x.sel).map(({ sel, ...x }) => x);
-  return { tasks, rewards: packRewards({ tasks, economy }).map(({ tier, ...x }) => x) };
+  return { tasks, rewards: packRewards({ tasks, economy }, ageId).map(({ tier, ...x }) => x) };
 }
 
 // ---- dates, schedules and family events ----
