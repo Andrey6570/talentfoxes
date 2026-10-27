@@ -3,6 +3,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, arrayUnion, increment } from "firebase/firestore";
 import { auth, db, googleSignIn, appSignOut, passwordSignIn, createChildAuthUser } from "./fb.js";
 import { KID_EMAIL_DOMAIN } from "./config.js";
+import { createDetector } from "./changes.js";
 import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid, planFee, defaultRules } from "./domain.js";
 
 // role: null (signed out) | "parent" | "kid"
@@ -14,7 +15,13 @@ let kidSubs = new Map();
 let kidDocs = [];
 const LOGS = new Map(), ORDERS = new Map();
 
+// ---- notifications without a server: see changes.js ----
+let onEvent = () => {};
+export const setOnEvent = f => { onEvent = f; };
+const detect = createDetector(() => M.role, ev => onEvent(ev));
+
 function stopAll() {
+  detect.reset();
   M.shared = { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } };
   unsubs.forEach(f => f()); unsubs = [];
   kidSubs.forEach(arr => arr.forEach(f => f())); kidSubs = new Map();
@@ -31,14 +38,15 @@ const kidRef = id => doc(db, "families", M.family.id, "kids", id);
 function watchKids(fid, snapQuery) {
   unsubs.push(onSnapshot(snapQuery, snap => {
     kidDocs = rows(snap).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    detect.tasks(kidDocs, snap.metadata);
     const ids = new Set(kidDocs.map(d => d.id));
     kidSubs.forEach((arr, id) => { if (!ids.has(id)) { arr.forEach(f => f()); kidSubs.delete(id); LOGS.delete(id); ORDERS.delete(id); } });
     kidDocs.forEach(d => {
       if (kidSubs.has(d.id)) return;
       const base = ["families", fid, "kids", d.id];
       kidSubs.set(d.id, [
-        onSnapshot(collection(db, ...base, "log"), s => { LOGS.set(d.id, rows(s)); rebuild(); }, onErr),
-        onSnapshot(collection(db, ...base, "orders"), s => { ORDERS.set(d.id, rows(s)); rebuild(); }, onErr)
+        onSnapshot(collection(db, ...base, "log"), s => { const list = rows(s); detect.log(d, list, s.metadata); LOGS.set(d.id, list); rebuild(); }, onErr),
+        onSnapshot(collection(db, ...base, "orders"), s => { const list = rows(s); detect.orders(d, list, s.metadata); ORDERS.set(d.id, list); rebuild(); }, onErr)
       ]);
     });
     rebuild();

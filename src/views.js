@@ -301,5 +301,7 @@ export function vSettings(S, ui) {
   return `<div class="in"><div class="row"><h2 class="grow">${t("Настройки")}</h2><button class="btn small ghost" data-act="closeSettings">${t("Закрыть")}</button></div>
     <div class="card"><h3>${t("Язык")}</h3>${pills("setLang", getLang(), [["ru", "Русский"], ["en", "English"]])}</div>
     <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}</div>
+    ${S.user ? `<div class="card"><h3>${t("Уведомления")}</h3>${pills("setNotify", ui.notify ? "on" : "off", [["on", t("Включены")], ["off", t("Выключены")]])}
+      <div class="hint">${t("Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.")}</div></div>` : ""}
     ${S.user ? `<div class="card"><h3>${t("Аккаунт")}</h3><div class="muted">${esc(S.user.email || "")}</div><button class="btn ghost" data-act="signout">${t("Выйти из аккаунта")}</button></div>` : ""}</div>`;
 }

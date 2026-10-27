@@ -1,8 +1,8 @@
 import "./styles.css";
-import { t, tf, getLang, toggleLang } from "./i18n.js";
+import { t, tf, getLang, toggleLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteLog, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { FEE_CAP_ONCE, newRun, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars } from "./domain.js";
@@ -10,8 +10,8 @@ import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl
 const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
-const THEME_KEY = "talent-foxes-theme";
-const ui = { settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const THEME_KEY = "talent-foxes-theme", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
+const ui = { notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -30,7 +30,7 @@ function errText(e) {
   if (/network|unavailable/.test(c)) return t("Нет связи с интернетом");
   return t("Не получилось") + (c ? " (" + c + ")" : "");
 }
-function toast(msg) { const el = $("#toast"); el.textContent = msg; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), 2400); }
+function toast(msg, ms = 2400) { const el = $("#toast"); el.textContent = msg; el.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("on"), ms); }
 async function run(fn, okMsg) {
   if (ui.busy) return;
   ui.err = ""; ui.busy = true;
@@ -78,6 +78,7 @@ function render() {
   else html = ui.tab === "home" ? V.vHome(k, S.shared) : ui.tab === "tasks" ? V.vTasks(k, ui) : ui.tab === "wheel" ? V.vWheel(k, ui) : V.vShop(k);
   if (!typing) $("#view").innerHTML = html;
   $("#view").style.cssText = "display:flex;flex-direction:column;gap:16px";
+  if (S.user && S.ready) askNotifyPermission();
   $("#sync").textContent = S.user ? t("Данные сохраняются в вашей семье и доступны на других устройствах") : "";
   tick();
 }
@@ -107,6 +108,26 @@ async function scheduleTimerEnd(ms) {
 }
 async function cancelTimerEnd() { const L = await localNotifications(); if (L) { try { await L.cancel({ notifications: [{ id: TIMER_NOTIFICATION }] }); } catch (e) {} } }
 
+// ---- notices about new tasks, approvals and requests (no server: they arrive while the app is running) ----
+let noticeId = 2000;
+async function showNotice(title, body) {
+  if (!ui.notify) return;
+  if (document.visibilityState === "visible") { toast(title + ". " + body, 6000); try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) {} return; }
+  const L = await localNotifications(); if (!L) return;
+  try { await L.schedule({ notifications: [{ id: noticeId++, title, body, schedule: { at: new Date(Date.now() + 300), allowWhileIdle: true } }] }); } catch (e) {}
+}
+setOnEvent(ev => {
+  if (ev.type === "logPending") showNotice(tf("{kid}: задание выполнено", { kid: ev.kid }), tf("{x} · +{n} ★, ждёт проверки", { x: disp(ev.title), n: ev.stars }));
+  else if (ev.type === "orderPending") showNotice(tf("{kid}: выбрана награда", { kid: ev.kid }), tf("{x} · {n} ★", { x: disp(ev.title), n: ev.cost }));
+  else if (ev.type === "taskAssigned") showNotice(t("Новое задание"), tf("{x} · +{n} ★", { x: disp(ev.title), n: ev.stars }));
+  else if (ev.type === "approved") showNotice(t("Родители подтвердили"), tf("{x} · +{n} ★", { x: disp(ev.title), n: ev.stars }));
+});
+// ask for permission once, right after the first sign-in on this device
+async function askNotifyPermission() {
+  if (LS.get(ASKED_KEY) || !S.user) return; LS.set(ASKED_KEY, "1");
+  const L = await localNotifications(); if (L) { try { await L.requestPermissions(); } catch (e) {} }
+}
+
 function tick() {
   const r = ui.run; if (!r || r.stage !== "run") return;
   const left = runRemaining(r), arc = $("#ringArc"), tm = $("#ringTime"), ring = document.querySelector(".ring");
@@ -129,6 +150,7 @@ const A = {
   openSettings() { ui.settings = true; render(); },
   closeSettings() { ui.settings = false; render(); },
   setLang(id) { if (getLang() !== id) toggleLang(); render(); },
+  setNotify(id) { ui.notify = id === "on"; LS.set(NOTIFY_KEY, id); if (ui.notify) { LS.set(ASKED_KEY, ""); askNotifyPermission(); } render(); },
   setTheme(id) { ui.theme = id; LS.set(THEME_KEY, id); applyTheme(); render(); },
   signout() { cancelTimerEnd(); ui.settings = false; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
   welcomeKid() { ui.welcome = "kid"; ui.err = ""; render(); },

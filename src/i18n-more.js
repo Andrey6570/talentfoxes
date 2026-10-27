@@ -61,5 +61,9 @@ export const EN_MORE = {
   "Пауз": "Pauses", "Время на паузах": "Time paused", "Отправить родителям": "Send to parents", "Не отправлять": "Do not send",
   "Время вышло!": "Time is up!", "Спидран уборки: таймер закончился": "Cleanup speedrun: the timer has finished",
   "Спидран: {a} из {p}, пауз {n} ({m}){o}": "Speedrun: {a} of {p}, {n} pauses ({m}){o}", ", сверх времени -{x}": ", over time -{x}",
-  "Не убрано после игры": "Not tidied up after playing", "Договорённость не выполнена вовремя": "An agreement was not kept on time"
+  "Не убрано после игры": "Not tidied up after playing", "Договорённость не выполнена вовремя": "An agreement was not kept on time",
+  "{kid}: задание выполнено": "{kid}: task completed", "{x} · +{n} ★, ждёт проверки": "{x} · +{n} ★, waiting for a check", "{kid}: выбрана награда": "{kid}: reward chosen", "{x} · {n} ★": "{x} · {n} ★",
+  "Новое задание": "New task", "{x} · +{n} ★": "{x} · +{n} ★", "Родители подтвердили": "Your parents approved", 
+  "Уведомления": "Notifications", "Включены": "On", "Выключены": "Off",
+  "Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.": "Notifications arrive while the app is open or was open recently. If it is closed, new things show up when you open it."
 };
