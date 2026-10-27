@@ -90,20 +90,22 @@ function syncReminders() {
 // so the same event is not shown twice (the app in front still shows its own banner).
 let pushActive = false;
 const pushState = { key: "", id: "" };
+ui.push = Capacitor.isNativePlatform() ? { state: "wait", err: "" } : null;
 async function syncPush() {
   if (!Capacitor.isNativePlatform() || !ui.notify || !S.user || !S.ready || !S.family || !S.family.id) return;
   const kid = S.role === "kid" ? myKid() : null; if (S.role === "kid" && !kid) return;
   const key = S.user.uid + ":" + (kid ? kid.id : "");
   if (pushState.key === key) return; pushState.key = key;
-  const ok = await startPush(async token => {
-    try { pushState.id = await saveDevice(token, { role: S.role, kidId: kid ? kid.id : "", lang: getLang() }); pushActive = true; } catch (e) { pushState.key = ""; }
-  });
-  if (!ok) pushState.key = "";
+  const res = await startPush(async token => {
+    try { pushState.id = await saveDevice(token, { role: S.role, kidId: kid ? kid.id : "", lang: getLang() }); pushActive = true; ui.push = { state: "on", err: "" }; if (ui.settings) render(); } catch (e) { pushState.key = ""; ui.push = { state: "error", err: String((e && e.code) || e) }; if (ui.settings) render(); }
+  }, msg => { ui.push = { state: "error", err: msg }; if (ui.settings) render(); });
+  if (res !== "ok") { pushState.key = ""; ui.push = { state: res === "denied" ? "denied" : "error", err: ui.push.err }; if (ui.settings) render(); }
 }
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);
 async function dropPush() {
   const id = pushState.id; pushState.key = ""; pushState.id = ""; pushActive = false;
-  if (id) { try { await removeDevice(id); } catch (e) {} }
-  await stopPush();
+  if (id) { try { await withTimeout(removeDevice(id), 2500); } catch (e) {} }
+  try { await withTimeout(stopPush(), 1500); } catch (e) {}
 }
 
 // ---------- first-run welcome ----------
@@ -222,9 +224,10 @@ const A = {
   helpWho(id) { ui.helpWho = id; render(); },
   helloAgain() { ui.settings = false; ui.settingsPage = null; ui.hello = S.role === "kid" && myKid() ? { role: "kid", kidId: myKid().id } : { role: "parent", step: 0 }; render(); },
   setLang(id) { setLang(id); if (pushState.id) setDeviceLang(pushState.id, id).catch(() => {}); render(); },
+  enablePush() { ui.notify = true; LS.set(NOTIFY_KEY, "on"); pushState.key = ""; ui.push = { state: "wait", err: "" }; render(); },
   setNotify(id) { ui.notify = id === "on"; LS.set(NOTIFY_KEY, id); if (ui.notify) { LS.set(ASKED_KEY, ""); askNotifyPermission(); } else dropPush(); render(); },
   setTheme(id) { ui.theme = id; LS.set(THEME_KEY, id); applyTheme(); render(); },
-  async signout() { cancelTimerEnd(); await dropPush(); ui.settings = false; ui.settingsPage = null; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
+  async signout() { cancelTimerEnd(); await dropPush(); if (ui.push) ui.push = { state: "wait", err: "" }; ui.settings = false; ui.settingsPage = null; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
   welcomeKid() { ui.welcome = "kid"; ui.err = ""; render(); },
   welcomeBack() { ui.welcome = "choose"; ui.err = ""; render(); },
   parentLogin() { run(() => parentSignIn()); },

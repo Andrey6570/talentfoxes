@@ -101,6 +101,13 @@ export function vPotCard(k, shared) {
         <div class="hint">${t("Первый раз за неделю это только напоминание. Взнос идёт в общую копилку, и его можно вернуть ремонтом.")}</div>` : ""}</div>`;
 }
 
+function pushStatus(ui) {
+  const p = ui.push; if (!p) return "";
+  const line = { on: "Уведомления с сервера: работают", denied: "Уведомления с сервера: нет разрешения", error: "Уведомления с сервера: не подключились", wait: "Уведомления с сервера: ждём подключения…" }[p.state];
+  return `<div class="state ${p.state === "on" ? "ok" : "wait"}" style="margin-top:8px">${t(line)}${p.state === "error" && p.err ? ` <small>(${esc(p.err)})</small>` : ""}</div>
+    ${p.state === "on" ? "" : `<button class="btn small" data-act="enablePush">${t("Включить уведомления")}</button>${p.state === "denied" ? `<div class="hint">${t("Если окно разрешения не появилось, откройте настройки телефона: Приложения, Talent Foxes, Уведомления, и включите их. Потом нажмите кнопку ещё раз.")}</div>` : ""}`}`;
+}
+
 export function vHome(k, shared) {
   const lv = level(k), m = mood(k), sk = aliveStreak(k), says = SAYS[m], say = says[new Date().getDate() % says.length], links = musicLinks(k);
   const label = tf(m === "happy" ? "{pet}, настроение: радостное" : m === "ok" ? "{pet}, настроение: спокойное" : "{pet}, настроение: скучает", { pet: k.pet.name });
@@ -393,7 +400,7 @@ export function vSettings(S, ui) {
     <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}</div>
     <div class="card"><h3>${t("Справка")}</h3><button class="btn ghost" data-act="openHelp">${t("Инструкция и частые вопросы")}</button>${S.user ? `<button class="btn small ghost" data-act="helloAgain">${t("Показать приветствие снова")}</button>` : ""}</div>
     ${S.user ? `<div class="card"><h3>${t("Уведомления")}</h3>${pills("setNotify", ui.notify ? "on" : "off", [["on", t("Включены")], ["off", t("Выключены")]])}
-      <div class="hint">${t("Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.")}</div></div>` : ""}
+      <div class="hint">${t("Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.")}</div>${pushStatus(ui)}</div>` : ""}
     ${S.role === "parent" && S.family ? dataCard(S, ui) : ""}
     ${S.user ? `<div class="card"><h3>${t("Аккаунт")}</h3><div class="muted">${esc(S.user.email || "")}</div><button class="btn ghost" data-act="signout">${t("Выйти из аккаунта")}</button></div>` : ""}</div>`;
 }

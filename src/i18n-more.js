@@ -310,5 +310,11 @@ export const EN_MORE = {
   "Показать приветствие снова": "Show the welcome again",
   "Справка и приветствие": "Help and welcome",
   "Ничего не найдено": "Nothing found",
-  "Новых заданий: {n}": "New tasks: {n}"
+  "Новых заданий: {n}": "New tasks: {n}",
+  "Уведомления с сервера: работают": "Server notifications: working",
+  "Уведомления с сервера: нет разрешения": "Server notifications: no permission",
+  "Уведомления с сервера: не подключились": "Server notifications: not connected",
+  "Уведомления с сервера: ждём подключения…": "Server notifications: connecting…",
+  "Включить уведомления": "Turn on notifications",
+  "Если окно разрешения не появилось, откройте настройки телефона: Приложения, Talent Foxes, Уведомления, и включите их. Потом нажмите кнопку ещё раз.": "If no permission window appeared, open the phone settings: Apps, Talent Foxes, Notifications, and turn them on. Then press the button again.",
 };
