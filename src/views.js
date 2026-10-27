@@ -1,7 +1,7 @@
 import { t, tf, pl, disp, getLang } from "./i18n.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
-import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
+import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
 
 import { esc } from "./util.js";
 export { esc };
@@ -117,8 +117,22 @@ function timerHtml(k, ui) {
   const st = statusOf(k, "speed-" + today()), r = ui.run, links = musicLinks(k);
   if (st === "done") return `<h3>${t("Спидран на сегодня засчитан")}</h3><div class="muted">${t("Завтра можно попробовать снова.")}</div>`;
   if (st === "pending") return `<h3>${t("Спидран ждёт проверки")}</h3><div class="muted">${t("Родители скоро посмотрят.")}</div>`;
-  if (r && r.finished) return `<div class="bubble">${t("Время! Успела?")}</div><h3>${t("Как получилось?")}</h3><div class="row" style="flex-wrap:wrap;justify-content:center"><button class="btn" data-act="speedDone">${t("Убрала! +3")}</button><button class="btn ghost" data-act="speedStop">${t("Ещё не всё")}</button></div>`;
-  if (r) return `<div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--surface2)" stroke-width="9"/><circle id="ringArc" cx="50" cy="50" r="44" fill="none" stroke="var(--clean)" stroke-width="9" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><div class="time" id="ringTime">--:--</div></div>${links ? `<div class="music">${links}</div>` : ""}<button class="btn ghost" data-act="speedStop">${t("Остановить")}</button>`;
+  if (r && r.stage === "summary") {
+    const row = (label, value, cls = "") => `<div class="stat ${cls}"><span>${t(label)}</span><b>${value}</b></div>`;
+    return `<h3>${t("Итог спидрана")}</h3><div class="stats">
+      ${row("Время уборки без пауз", fmtMs(runActive(r)))}${row("Было на таймере", fmtMs(r.planned))}
+      ${r.over > 0 ? row("Сверх времени", "-" + fmtMs(r.over), "bad") : row("Осталось", fmtMs(r.left))}
+      ${row("Пауз", r.pauses)}${row("Время на паузах", fmtMs(r.pausedMs))}</div>
+      <div class="row" style="flex-wrap:wrap;justify-content:center"><button class="btn" data-act="speedSend">${t("Отправить родителям")}</button><button class="btn ghost" data-act="speedCancel">${t("Не отправлять")}</button></div>`;
+  }
+  if (r) {
+    const left = runRemaining(r), over = left < 0;
+    return `<div class="ring ${over ? "over" : ""}"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--surface2)" stroke-width="9"/><circle id="ringArc" cx="50" cy="50" r="44" fill="none" stroke="${over ? "var(--bad)" : "var(--green)"}" stroke-width="9" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><div class="time" id="ringTime">${fmtMs(left)}</div></div>
+      ${r.paused ? `<div class="state wait">${t("Пауза")}</div>` : over ? `<div class="state no">${t("Время вышло, таймер идёт в минус")}</div>` : ""}
+      ${links ? `<div class="music">${links}</div>` : ""}
+      <div class="row" style="flex-wrap:wrap;justify-content:center"><button class="btn ghost" data-act="speedPause">${r.paused ? t("Продолжить") : t("Пауза")}</button><button class="btn" data-act="speedFinish">${t("Выполнено")}</button></div>
+      <button class="btn small ghost" data-act="speedCancel">${ui.confirmCancel ? t("Точно отменить?") : t("Отмена")}</button>`;
+  }
   return `<h3>${t("Уборка на время")}</h3><div class="muted">${t("Включи свой любимый плейлист и успей убрать комнату до конца таймера.")}</div>
     ${links ? `<div class="music" style="justify-content:center">${links}</div>` : ""}
     <div class="pills">${[5, 10, 15].map(n => `<button class="pill ${ui.mins === n ? "on" : ""}" data-act="mins" data-id="${n}">${tf("{n} мин", { n })}</button>`).join("")}</div>
@@ -145,7 +159,7 @@ export function vWheel(k, ui) {
   });
   const pk = ui.pick;
   const result = pk ? `<div class="card result"><div class="big">${pk.icon}</div><h3>${esc(t(pk.title))}</h3><span class="reward-line">${STAR}+${pk.stars}</span>${
-    statusOf(k, pk.id) === "pending" ? `<div class="state wait">${t("Ждёт проверки")}</div>` : statusOf(k, pk.id) === "done" ? `<div class="state ok">${t("Засчитано")}</div>` : `<button class="btn" data-act="submitPick">${t("Сделала!")}</button>`}</div>`
+    statusOf(k, pk.id) === "pending" ? `<div class="state wait">${t("Ждёт проверки")}</div>` : statusOf(k, pk.id) === "done" ? `<div class="state ok">${t("Засчитано")}</div>` : `<button class="btn" data-act="submitPick">${t("Готово!")}</button>`}</div>`
     : `<div class="card result"><h3>${t("Крути колесо")}</h3><div class="muted">${t("Выпадет случайное задание. Если не нравится, крути ещё раз.")}</div></div>`;
   return `<h2>${t("Колесо заданий")}</h2><div class="wheelbox"><div class="pointer"></div><svg viewBox="0 0 320 320" aria-hidden="true"><g id="wheel" style="transform:rotate(${ui.wheelRot}deg)">${segs}${labels}<circle cx="160" cy="160" r="22" fill="#fff" stroke="#ddd" stroke-width="2"/></g></svg></div>
     <button class="btn" data-act="spin" id="spinBtn" ${ui.spinning ? "disabled" : ""}>${t("Крутить!")}</button>${result}`;
@@ -186,9 +200,10 @@ export function vParent(M, ui) {
     x.log.filter(l => l.status === "pending").forEach(l => pendLogs.push({ k: x, l }));
     x.orders.filter(o => o.status === "pending").forEach(o => pendOrders.push({ k: x, o }));
   });
-  const tag = x => kids.length > 1 ? `<span class="kidtag">${esc(x.name)}</span> ` : "";
+  const tag = x => `<span class="kidtag">${esc(x.name)}</span> `;
+  const speedNote = l => l.speed ? `<div class="muted">${tf("Спидран: {a} из {p}, пауз {n} ({m}){o}", { a: fmtMs(l.speed.active), p: fmtMs(l.speed.planned), n: l.speed.pauses, m: fmtMs(l.speed.pausedMs), o: l.speed.over > 0 ? tf(", сверх времени -{x}", { x: fmtMs(l.speed.over) }) : "" })}</div>` : "";
   const pending = `<div class="card"><h3>${t("Нужно подтвердить")}</h3>${pendLogs.length || pendOrders.length ? "" : `<div class="muted">${t("Пока ничего нет")}</div>`}
-    ${pendLogs.map(({ k: x, l }) => `<div class="pending"><div class="grow"><div>${tag(x)}${esc(disp(l.title))}</div><div class="muted">${tf("{k} · +{n} {w}", { k: kindName(l.kind), n: l.stars, w: pl(l.stars, "звезда|звезды|звёзд", "star|stars") })}</div></div><button class="nobtn" data-act="logNo" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Не засчитать")}">✕</button><button class="okbtn" data-act="logOk" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Засчитать")}">✓</button></div>`).join("")}
+    ${pendLogs.map(({ k: x, l }) => `<div class="pending"><div class="grow"><div>${tag(x)}${esc(disp(l.title))}</div><div class="muted">${tf("{k} · +{n} {w}", { k: kindName(l.kind), n: l.stars, w: pl(l.stars, "звезда|звезды|звёзд", "star|stars") })}</div>${speedNote(l)}</div><button class="nobtn" data-act="logNo" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Не засчитать")}">✕</button><button class="okbtn" data-act="logOk" data-kid="${x.id}" data-id="${l.id}" aria-label="${t("Засчитать")}">✓</button></div>`).join("")}
     ${pendOrders.map(({ k: x, o }) => `<div class="pending"><div class="grow"><div>${tag(x)}${esc(o.icon || "🎁")} ${esc(t(o.title))}</div><div class="muted">${tf("Награда за {n} {w}", { n: o.cost, w: pl(o.cost, "звезду|звезды|звёзд", "star|stars") })}</div></div><button class="nobtn" data-act="orderNo" data-kid="${x.id}" data-id="${o.id}" aria-label="${t("Вернуть звёзды")}">↩</button><button class="okbtn" data-act="orderOk" data-kid="${x.id}" data-id="${o.id}" aria-label="${t("Выдано")}">✓</button></div>`).join("")}</div>`;
 
   const family = `<div class="card"><h3>${t("Семья")}</h3>

@@ -207,3 +207,14 @@ label.muted { margin-bottom: -6px; }
 /* messages from the fox */
 .notice { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 12px; border-radius: 14px; background: var(--surface2); }
 .notice .btn { align-self: stretch; }
+
+/* speedrun timer */
+:root { --green: #1B8A4B; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --green: #4FD58A; } }
+:root[data-theme="dark"] { --green: #4FD58A; }
+.ring.over .time { color: var(--bad); }
+.stats { display: flex; flex-direction: column; width: 100%; font-variant-numeric: tabular-nums; }
+.stat { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); text-align: left; }
+.stat:first-child { border-top: 0; }
+.stat b { font-family: var(--f-display); font-size: 18px; }
+.stat.bad b { color: var(--bad); }

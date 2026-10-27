@@ -3,7 +3,8 @@ import { t, tf, getLang, toggleLang } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
   saveTasks, saveRewards, savePlaylists, saveEconomy, deleteLog, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
-import { FEE_CAP_ONCE } from "./domain.js";
+import { FEE_CAP_ONCE, newRun, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
+import { Capacitor } from "@capacitor/core";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars } from "./domain.js";
 
 const $ = s => document.querySelector(s);
@@ -83,18 +84,37 @@ function render() {
 const esc = V.esc;
 
 // ---------- timer ----------
-function beep() {
+function beep(times = 3) {
   try { const A = window.AudioContext || window.webkitAudioContext, ctx = new A();
-    [0, .25, .5].forEach(d => { const o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(.2, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + d + .2); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .22); }); } catch (e) {}
+    for (let i = 0; i < times * 2; i++) { const d = i * .28, o = ctx.createOscillator(), g = ctx.createGain(); o.frequency.value = i % 2 ? 660 : 880; o.connect(g); g.connect(ctx.destination); g.gain.setValueAtTime(.25, ctx.currentTime + d); g.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + d + .24); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + .26); } } catch (e) {}
+  try { if (navigator.vibrate) navigator.vibrate([250, 120, 250, 120, 250]); } catch (e) {}
 }
 let lock = null;
 async function wake(on) { try { if (on && navigator.wakeLock) lock = await navigator.wakeLock.request("screen"); else if (lock) { await lock.release(); lock = null; } } catch (e) {} }
+
+// An alert at the moment the time runs out, so the signal is not lost when the screen is off or the app is in the background.
+const TIMER_NOTIFICATION = 1001;
+async function localNotifications() {
+  if (!Capacitor.isNativePlatform()) return null;
+  try { return (await import("@capacitor/local-notifications")).LocalNotifications; } catch (e) { return null; }
+}
+async function scheduleTimerEnd(ms) {
+  const L = await localNotifications(); if (!L || ms <= 0) return;
+  try {
+    const perm = await L.requestPermissions(); if (perm.display !== "granted") return;
+    await L.schedule({ notifications: [{ id: TIMER_NOTIFICATION, title: t("Время вышло!"), body: t("Спидран уборки: таймер закончился"), schedule: { at: new Date(Date.now() + ms), allowWhileIdle: true } }] });
+  } catch (e) {}
+}
+async function cancelTimerEnd() { const L = await localNotifications(); if (L) { try { await L.cancel({ notifications: [{ id: TIMER_NOTIFICATION }] }); } catch (e) {} } }
+
 function tick() {
-  const r = ui.run; if (!r || r.finished) return;
-  const left = Math.max(0, r.end - Date.now()), arc = $("#ringArc"), tm = $("#ringTime");
-  if (tm) { const s = Math.ceil(left / 1000); tm.textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
-  if (arc) arc.style.strokeDashoffset = String(276.5 * (1 - left / r.total));
-  if (left <= 0) { r.finished = true; wake(false); beep(); render(); }
+  const r = ui.run; if (!r || r.stage !== "run") return;
+  const left = runRemaining(r), arc = $("#ringArc"), tm = $("#ringTime"), ring = document.querySelector(".ring");
+  const over = left < 0;
+  if (tm) tm.textContent = fmtMs(left);
+  if (arc) { arc.style.strokeDashoffset = String(over ? 0 : 276.5 * (1 - Math.max(0, left / r.planned))); arc.style.stroke = over ? "var(--bad)" : "var(--green)"; }
+  if (ring) ring.classList.toggle("over", over);
+  if (left <= 0 && !r.signalled && !r.paused) { r.signalled = true; beep(); render(); }
 }
 setInterval(tick, 250);
 
@@ -110,7 +130,7 @@ const A = {
   closeSettings() { ui.settings = false; render(); },
   setLang(id) { if (getLang() !== id) toggleLang(); render(); },
   setTheme(id) { ui.theme = id; LS.set(THEME_KEY, id); applyTheme(); render(); },
-  signout() { ui.settings = false; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
+  signout() { cancelTimerEnd(); ui.settings = false; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
   welcomeKid() { ui.welcome = "kid"; ui.err = ""; render(); },
   welcomeBack() { ui.welcome = "choose"; ui.err = ""; render(); },
   parentLogin() { run(() => parentSignIn()); },
@@ -129,9 +149,21 @@ const A = {
   accent(id) { saveAccent(myKid(), id).catch(fail); },
   submit(id) { const k = myKid(), tk = k.tasks.concat([zoneTask()]).find(x => x.id === id); if (tk) submitTask(k, tk).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail); },
   mins(id) { ui.mins = +id; render(); },
-  speedStart() { ui.run = { end: Date.now() + ui.mins * 60000, total: ui.mins * 60000, finished: false }; wake(true); render(); },
-  speedStop() { ui.run = null; wake(false); render(); },
-  speedDone() { ui.run = null; submitTask(myKid(), { id: "speed-" + today(), title: "Уборка на время", kind: "clean", stars: 3 }).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail); render(); },
+  speedStart() { ui.run = newRun(ui.mins); ui.confirmCancel = false; wake(true); scheduleTimerEnd(ui.run.planned); render(); },
+  speedPause() {
+    const r = ui.run; if (!r) return;
+    if (r.paused) { resumeRun(r); if (runRemaining(r) > 0) scheduleTimerEnd(runRemaining(r)); } else { pauseRun(r); cancelTimerEnd(); }
+    render();
+  },
+  speedFinish() { const r = ui.run; if (!r) return; finishRun(r); ui.confirmCancel = false; wake(false); cancelTimerEnd(); render(); },
+  speedCancel() {
+    if (ui.run && ui.run.stage === "run" && !ui.confirmCancel) { ui.confirmCancel = true; render(); return; }
+    ui.run = null; ui.confirmCancel = false; wake(false); cancelTimerEnd(); render();
+  },
+  speedSend() {
+    const r = ui.run; if (!r) return; ui.run = null;
+    submitTask(myKid(), { id: "speed-" + today(), title: "Уборка на время", kind: "clean", stars: 3 }, { speed: speedPayload(r) }).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail); render();
+  },
   spin() {
     if (ui.spinning) return; ui.spinning = true; ui.pick = null;
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;

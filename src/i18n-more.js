@@ -54,5 +54,12 @@ export const EN_MORE = {
   "Цель сохранена": "Goal saved", "В копилку добавлено {n} ★": "{n} ★ added to the pot", "Копилка обнулена": "The pot was reset", "Напоминание отправлено": "Reminder sent", "Отменено": "Undone",
   "Ремонт: {x}": "Repair: {x}",
   "Не убрал после игры": "Did not tidy up after playing", "Собрать игрушки": "Pick up the toys", "Грубое слово": "A rude word", "Извиниться и помочь по дому": "Apologise and help around the house",
-  "Не сделал вовремя то, о чём договорились": "Did not do what we agreed on time"
+  "Не сделал вовремя то, о чём договорились": "Did not do what we agreed on time",
+  "Готово!": "Done!", "Пауза": "Pause", "Продолжить": "Resume", "Выполнено": "Finished", "Отмена": "Cancel", "Точно отменить?": "Really cancel?",
+  "Время вышло, таймер идёт в минус": "Time is up, the timer is counting below zero", "Итог спидрана": "Speedrun result",
+  "Время уборки без пауз": "Cleaning time without pauses", "Было на таймере": "Timer was set to", "Сверх времени": "Over time", "Осталось": "Left",
+  "Пауз": "Pauses", "Время на паузах": "Time paused", "Отправить родителям": "Send to parents", "Не отправлять": "Do not send",
+  "Время вышло!": "Time is up!", "Спидран уборки: таймер закончился": "Cleanup speedrun: the timer has finished",
+  "Спидран: {a} из {p}, пауз {n} ({m}){o}": "Speedrun: {a} of {p}, {n} pauses ({m}){o}", ", сверх времени -{x}": ", over time -{x}",
+  "Не убрано после игры": "Not tidied up after playing", "Договорённость не выполнена вовремя": "An agreement was not kept on time"
 };

@@ -74,6 +74,7 @@ export const pl = (n, ru, en) => {
   return m > 10 && m < 20 ? r[2] : k > 1 && k < 5 ? r[1] : k === 1 ? r[0] : r[2];
 };
 // display name of a task, reward or log title: defaults are translated, custom text stays as typed
-export const disp = s => s.indexOf("Зона дня: ") === 0 ? tf("Зона дня: {z}", { z: t(s.slice(10)) })
-  : s.indexOf("Ремонт: ") === 0 ? tf("Ремонт: {x}", { x: t(s.slice(8)) }) : t(s);
+const NEUTRAL = { "Не убрал после игры": "Не убрано после игры", "Не сделал вовремя то, о чём договорились": "Договорённость не выполнена вовремя" };
+export const disp = s0 => { const s = NEUTRAL[s0] || s0; return s.indexOf("Зона дня: ") === 0 ? tf("Зона дня: {z}", { z: t(s.slice(10)) })
+  : s.indexOf("Ремонт: ") === 0 ? tf("Ремонт: {x}", { x: t(s.slice(8)) }) : t(s); };
 document.documentElement.lang = lang;

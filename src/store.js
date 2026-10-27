@@ -195,8 +195,8 @@ export async function undoRule(kid, entry) {
 export const deleteLog = (kid, entry) => deleteDoc(doc(db, "families", M.family.id, "kids", kid.id, "log", entry.id));
 
 // ---- child actions ----
-export function submitTask(kid, task) {
-  return addDoc(collection(db, "families", M.family.id, "kids", kid.id, "log"), { type: "task", taskId: task.id, title: task.title, kind: task.kind, stars: task.stars, status: "pending", day: today(), ts: Date.now() });
+export function submitTask(kid, task, extra = {}) {
+  return addDoc(collection(db, "families", M.family.id, "kids", kid.id, "log"), Object.assign({ type: "task", taskId: task.id, title: task.title, kind: task.kind, stars: task.stars, status: "pending", day: today(), ts: Date.now() }, extra));
 }
 export function orderReward(kid, r) {
   return addDoc(collection(db, "families", M.family.id, "kids", kid.id, "orders"), { kind: "reward", refId: r.id, title: r.title, icon: r.icon || "🎁", cost: r.cost, status: "pending", ts: Date.now() });

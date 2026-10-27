@@ -181,9 +181,9 @@ export const FEE_CAP_WEEK_SHARE = 0.2;
 export const REPAIR_WINDOW_MS = 24 * 3600 * 1000;
 export const NOTICE_WINDOW_MS = 3 * 24 * 3600 * 1000;
 export const defaultRules = () => [
-  { id: "u1", title: "Не убрал после игры", cost: 1, repair: "Собрать игрушки" },
+  { id: "u1", title: "Не убрано после игры", cost: 1, repair: "Собрать игрушки" },
   { id: "u2", title: "Грубое слово", cost: 2, repair: "Извиниться и помочь по дому" },
-  { id: "u3", title: "Не сделал вовремя то, о чём договорились", cost: 1, repair: "" }
+  { id: "u3", title: "Договорённость не выполнена вовремя", cost: 1, repair: "" }
 ];
 export function planFee(k, rule, now = Date.now()) {
   const weekAgo = now - 7 * 864e5;
@@ -202,3 +202,26 @@ export const noticesOf = (k, now = Date.now()) =>
   k.log.filter(l => (l.kind === "fee" || l.kind === "warn") && now - l.ts <= NOTICE_WINDOW_MS).sort((a, b) => b.ts - a.ts);
 export const repairOpen = (k, fee, now = Date.now()) =>
   !!fee.repair && now - fee.ts <= REPAIR_WINDOW_MS && statusOf(k, "repair-" + fee.id, "once") === null;
+
+// ---- speedrun timer ----
+// The clock counts down to endAt. A pause freezes it and pushes endAt back by the pause length. After zero the
+// remaining time goes negative (overtime) until the child taps "done".
+export function newRun(mins) {
+  const now = Date.now();
+  return { planned: mins * 60000, startedAt: now, endAt: now + mins * 60000, paused: false, pausedAt: 0, pauses: 0, pausedMs: 0, signalled: false, stage: "run", doneAt: 0, left: 0, over: 0 };
+}
+export const runRemaining = (r, now = Date.now()) => r.endAt - (r.paused ? r.pausedAt : now);
+export const runPausedMs = (r, now = Date.now()) => r.pausedMs + (r.paused && !r.doneAt ? now - r.pausedAt : 0);
+export const runActive = (r, now = Date.now()) => Math.max(0, (r.doneAt || now) - r.startedAt - runPausedMs(r, now));
+export function pauseRun(r, now = Date.now()) { if (!r.paused) { r.paused = true; r.pausedAt = now; r.pauses++; } return r; }
+export function resumeRun(r, now = Date.now()) { if (r.paused) { r.endAt += now - r.pausedAt; r.pausedMs += now - r.pausedAt; r.paused = false; } return r; }
+export function finishRun(r, now = Date.now()) {
+  resumeRun(r, now);
+  r.doneAt = now; r.left = Math.max(0, r.endAt - now); r.over = Math.max(0, now - r.endAt); r.stage = "summary";
+  return r;
+}
+export function fmtMs(ms) {
+  const neg = ms < 0, s = neg ? Math.floor(-ms / 1000) : Math.ceil(ms / 1000);
+  return (neg ? "-" : "") + String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+}
+export const speedPayload = r => ({ planned: r.planned, active: runActive(r), pauses: r.pauses, pausedMs: r.pausedMs, over: r.over, left: r.left });
