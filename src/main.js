@@ -2,9 +2,10 @@ import "./styles.css";
 import { t, tf, getLang, setLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, saveScale, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, saveScale, saveDevice, setDeviceLang, removeDevice, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { FEE_CAP_ONCE, newRun, rescaleKid, reminderPlan, parseDay, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
+import { startPush, stopPush } from "./push.js";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars, normLogin } from "./domain.js";
 
 const $ = s => document.querySelector(s);
@@ -84,6 +85,27 @@ function syncReminders() {
   }, 1500);
 }
 
+// ---------- push notifications ----------
+// This device registers for push once the person is known. While push works, the local background notices are switched off
+// so the same event is not shown twice (the app in front still shows its own banner).
+let pushActive = false;
+const pushState = { key: "", id: "" };
+async function syncPush() {
+  if (!Capacitor.isNativePlatform() || !ui.notify || !S.user || !S.ready || !S.family || !S.family.id) return;
+  const kid = S.role === "kid" ? myKid() : null; if (S.role === "kid" && !kid) return;
+  const key = S.user.uid + ":" + (kid ? kid.id : "");
+  if (pushState.key === key) return; pushState.key = key;
+  const ok = await startPush(async token => {
+    try { pushState.id = await saveDevice(token, { role: S.role, kidId: kid ? kid.id : "", lang: getLang() }); pushActive = true; } catch (e) { pushState.key = ""; }
+  });
+  if (!ok) pushState.key = "";
+}
+async function dropPush() {
+  const id = pushState.id; pushState.key = ""; pushState.id = ""; pushActive = false;
+  if (id) { try { await removeDevice(id); } catch (e) {} }
+  await stopPush();
+}
+
 // ---------- first-run welcome ----------
 const HELLO_PARENT_KEY = "talent-foxes-hello-parent", helloKidKey = id => "talent-foxes-hello-kid-" + id;
 function maybeHello(k) {
@@ -120,6 +142,7 @@ function render() {
   if (S.user && S.ready) askNotifyPermission();
   maybeHello(k);
   syncReminders();
+  syncPush();
   const hl = $("#hello"); hl.hidden = !ui.hello;
   if (ui.hello) { hl.innerHTML = V.vHello(ui.hello, k); document.body.style.overflow = "hidden"; }
   $("#sync").textContent = S.user ? t("Данные сохраняются в вашей семье и доступны на других устройствах") : "";
@@ -155,6 +178,7 @@ async function cancelTimerEnd() { const L = await localNotifications(); if (L) {
 let noticeId = 2000;
 async function showNotice(title, body) {
   if (!ui.notify) return;
+  if (document.visibilityState !== "visible" && pushActive) return; // the push message already covers this
   if (document.visibilityState === "visible") { toast(title + ". " + body, 6000); try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) {} return; }
   const L = await localNotifications(); if (!L) return;
   try { await L.schedule({ notifications: [{ id: noticeId++, title, body, schedule: { at: new Date(Date.now() + 300), allowWhileIdle: true } }] }); } catch (e) {}
@@ -197,10 +221,10 @@ const A = {
   helpTab(id) { ui.helpTab = id; render(); },
   helpWho(id) { ui.helpWho = id; render(); },
   helloAgain() { ui.settings = false; ui.settingsPage = null; ui.hello = S.role === "kid" && myKid() ? { role: "kid", kidId: myKid().id } : { role: "parent", step: 0 }; render(); },
-  setLang(id) { setLang(id); render(); },
-  setNotify(id) { ui.notify = id === "on"; LS.set(NOTIFY_KEY, id); if (ui.notify) { LS.set(ASKED_KEY, ""); askNotifyPermission(); } render(); },
+  setLang(id) { setLang(id); if (pushState.id) setDeviceLang(pushState.id, id).catch(() => {}); render(); },
+  setNotify(id) { ui.notify = id === "on"; LS.set(NOTIFY_KEY, id); if (ui.notify) { LS.set(ASKED_KEY, ""); askNotifyPermission(); } else dropPush(); render(); },
   setTheme(id) { ui.theme = id; LS.set(THEME_KEY, id); applyTheme(); render(); },
-  signout() { cancelTimerEnd(); ui.settings = false; ui.settingsPage = null; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
+  async signout() { cancelTimerEnd(); await dropPush(); ui.settings = false; ui.settingsPage = null; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
   welcomeKid() { ui.welcome = "kid"; ui.err = ""; render(); },
   welcomeBack() { ui.welcome = "choose"; ui.err = ""; render(); },
   parentLogin() { run(() => parentSignIn()); },
@@ -343,8 +367,8 @@ const A = {
   delKidCancel() { ui.delKid = null; render(); },
   delStart(stage) { ui.delStage = stage; ui.err = ""; render(); },
   delCancel() { ui.delStage = null; ui.err = ""; render(); },
-  deleteFamily() { if (val("delWord").trim().toUpperCase() !== t("УДАЛИТЬ")) return fail({ code: "need-word" }); run(async () => { await deleteFamilyAndAccount(); ui.settings = false; ui.delStage = null; }); },
-  leaveFamily() { if (val("delWord").trim().toUpperCase() !== t("УДАЛИТЬ")) return fail({ code: "need-word" }); run(async () => { await leaveFamilyAndDeleteAccount(); ui.settings = false; ui.delStage = null; }); }
+  deleteFamily() { if (val("delWord").trim().toUpperCase() !== t("УДАЛИТЬ")) return fail({ code: "need-word" }); run(async () => { await dropPush(); await deleteFamilyAndAccount(); ui.settings = false; ui.delStage = null; }); },
+  leaveFamily() { if (val("delWord").trim().toUpperCase() !== t("УДАЛИТЬ")) return fail({ code: "need-word" }); run(async () => { await dropPush(); await leaveFamilyAndDeleteAccount(); ui.settings = false; ui.delStage = null; }); }
 };
 
 document.addEventListener("click", e => {

@@ -183,7 +183,7 @@ export async function deleteFamilyAndAccount() {
     await deleteSubcollections(["families", fid, "kids", k.id], ["log", "orders"]);
     const b = writeBatch(db); b.delete(doc(db, "families", fid, "kids", k.id)); b.delete(doc(db, "logins", `${code}__${k.login}`)); await b.commit();
   }
-  await deleteSubcollections(["families", fid], ["shared", "events"]);
+  await deleteSubcollections(["families", fid], ["shared", "events", "devices"]);
   await deleteDoc(doc(db, "invites", code));
   await deleteDoc(doc(db, "families", fid));
   await deleteCurrentUser();
@@ -226,6 +226,17 @@ export const giveBonus = (kid, n, why) => addDoc(collection(db, "families", M.fa
 const sharedDoc = id => doc(db, "families", M.family.id, "shared", id);
 export const saveEvent = ev => addDoc(collection(db, "families", M.family.id, "events"), Object.assign({ createdAt: Date.now() }, ev));
 export const deleteEvent = id => deleteDoc(doc(db, "families", M.family.id, "events", id));
+// ---- devices that receive push notifications ----
+const sha = async text => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)))].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+export async function saveDevice(token, { role, kidId, lang }) {
+  const id = await sha(token);
+  const data = { token, uid: M.user.uid, role, lang, platform: "android", updatedAt: Date.now() };
+  if (role === "kid") data.kidId = kidId;
+  await setDoc(doc(db, "families", M.family.id, "devices", id), data);
+  return id;
+}
+export const setDeviceLang = (id, lang) => updateDoc(doc(db, "families", M.family.id, "devices", id), { lang });
+export const removeDevice = id => deleteDoc(doc(db, "families", M.family.id, "devices", id));
 export const saveRules = items => setDoc(sharedDoc("rules"), { items });
 export const seedRules = () => saveRules(defaultRules());
 export const saveGoal = (goalTitle, goalCost) => setDoc(sharedDoc("pot"), { goalTitle, goalCost }, { merge: true });

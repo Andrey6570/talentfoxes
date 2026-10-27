@@ -61,6 +61,16 @@ service cloud.firestore {
         allow write: if isParent(fid);
       }
 
+      // push-notification devices: each person writes only their own device; the server reads them
+      match /devices/{id} {
+        allow read: if isParent(fid);
+        allow create, update: if signedIn() && request.resource.data.uid == request.auth.uid
+          && (resource == null || resource.data.uid == request.auth.uid)
+          && ((isParent(fid) && request.resource.data.role == 'parent')
+              || (isFamilyKid(fid) && request.resource.data.role == 'kid' && isKid(fid, request.resource.data.kidId)));
+        allow delete: if isParent(fid) || (signedIn() && resource.data.uid == request.auth.uid);
+      }
+
       // family events: parents write, the family's children read
       match /events/{id} {
         allow read: if isParent(fid) || isFamilyKid(fid);

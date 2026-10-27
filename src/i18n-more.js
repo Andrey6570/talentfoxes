@@ -309,5 +309,6 @@ export const EN_MORE = {
   "Для ребёнка": "For kids",
   "Показать приветствие снова": "Show the welcome again",
   "Справка и приветствие": "Help and welcome",
-  "Ничего не найдено": "Nothing found"
+  "Ничего не найдено": "Nothing found",
+  "Новых заданий: {n}": "New tasks: {n}"
 };

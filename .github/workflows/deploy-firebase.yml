@@ -1,0 +1,45 @@
+name: Deploy Firebase (functions and rules)
+
+# Publishes the server functions (push notifications, clean-up) and the database rules.
+# Needs the FIREBASE_SERVICE_ACCOUNT secret (see README, "Push notifications"). Run it by hand once, then it runs on changes.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["functions/**", "firestore.rules", "firebase.json"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the service account secret exists
+        id: secret
+        env:
+          KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$KEY" ]; then echo "FIREBASE_SERVICE_ACCOUNT is not set yet, skipping the deploy"; echo "ok=false" >> "$GITHUB_OUTPUT"; else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-node@v4
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install the functions' dependencies and run their tests
+        if: steps.secret.outputs.ok == 'true'
+        working-directory: functions
+        run: |
+          npm ci
+          npm test
+
+      - uses: google-github-actions/auth@v2
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Deploy
+        if: steps.secret.outputs.ok == 'true'
+        run: npx --yes firebase-tools@latest deploy --only functions,firestore:rules --project talent-foxes --non-interactive --force
