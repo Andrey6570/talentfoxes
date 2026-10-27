@@ -96,9 +96,12 @@ async function syncPush() {
   const kid = S.role === "kid" ? myKid() : null; if (S.role === "kid" && !kid) return;
   const key = S.user.uid + ":" + (kid ? kid.id : "");
   if (pushState.key === key) return; pushState.key = key;
+  const step = s => { ui.push = Object.assign({}, ui.push, { step: s }); if (ui.settings) render(); };
   const res = await startPush(async token => {
+    step("token received");
     try { pushState.id = await saveDevice(token, { role: S.role, kidId: kid ? kid.id : "", lang: getLang() }); pushActive = true; ui.push = { state: "on", err: "" }; if (ui.settings) render(); } catch (e) { pushState.key = ""; ui.push = { state: "error", err: String((e && e.code) || e) }; if (ui.settings) render(); }
-  }, msg => { ui.push = { state: "error", err: msg }; if (ui.settings) render(); });
+  }, msg => { ui.push = { state: "error", err: msg }; if (ui.settings) render(); }, step);
+  if (res === "ok") setTimeout(() => { if (ui.push && ui.push.state === "wait") { ui.push = { state: "error", err: "no token after 15 s (" + (ui.push.step || "?") + ")" }; pushState.key = ""; if (ui.settings) render(); } }, 15000);
   if (res !== "ok") { pushState.key = ""; ui.push = { state: res === "denied" ? "denied" : "error", err: ui.push.err }; if (ui.settings) render(); }
 }
 const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(r, ms))]);

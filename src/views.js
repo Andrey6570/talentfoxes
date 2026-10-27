@@ -104,7 +104,7 @@ export function vPotCard(k, shared) {
 function pushStatus(ui) {
   const p = ui.push; if (!p) return "";
   const line = { on: "Уведомления с сервера: работают", denied: "Уведомления с сервера: нет разрешения", error: "Уведомления с сервера: не подключились", wait: "Уведомления с сервера: ждём подключения…" }[p.state];
-  return `<div class="state ${p.state === "on" ? "ok" : "wait"}" style="margin-top:8px">${t(line)}${p.state === "error" && p.err ? ` <small>(${esc(p.err)})</small>` : ""}</div>
+  return `<div class="state ${p.state === "on" ? "ok" : "wait"}" style="margin-top:8px">${t(line)}${p.state === "error" && p.err ? ` <small>(${esc(p.err)})</small>` : p.state === "wait" && p.step ? ` <small>(${esc(p.step)})</small>` : ""}</div>
     ${p.state === "on" ? "" : `<button class="btn small" data-act="enablePush">${t("Включить уведомления")}</button>${p.state === "denied" ? `<div class="hint">${t("Если окно разрешения не появилось, откройте настройки телефона: Приложения, Talent Foxes, Уведомления, и включите их. Потом нажмите кнопку ещё раз.")}</div>` : ""}`}`;
 }
 
