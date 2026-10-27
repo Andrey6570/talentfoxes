@@ -1,4 +1,5 @@
 import { t, tf, pl, disp, getLang } from "./i18n.js";
+import { LEGAL_URL } from "./config.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
 import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
@@ -16,6 +17,12 @@ export const TABS = [
   { id: "shop", name: "Магазин", svg: '<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/>' }
 ];
 
+export const legalLinks = () => {
+  if (!LEGAL_URL) return "";
+  const l = getLang();
+  return `<a href="${LEGAL_URL}privacy-${l}.html" target="_blank" rel="noopener noreferrer">${t("Политика конфиденциальности")}</a> · <a href="${LEGAL_URL}terms-${l}.html" target="_blank" rel="noopener noreferrer">${t("Условия использования")}</a>`;
+};
+const consentBox = (id, text) => `<label class="check"><input type="checkbox" id="${id}"><span>${text}</span></label>`;
 const errBox = e => e ? `<div class="err" role="alert">${esc(e)}</div>` : "";
 
 // ---------- signed out ----------
@@ -39,6 +46,8 @@ export function vWelcome(ui) {
 
 export function vFamilySetup(M, ui) {
   return `<div class="card" style="align-items:stretch"><h2>${t("Добро пожаловать!")}</h2><div class="muted">${esc(M.user && M.user.email || "")}</div>${errBox(ui.err)}
+      ${consentBox("famConsent", t("Принимаю условия использования и политику конфиденциальности."))}
+      <div class="hint">${legalLinks()}</div>
       <h3>${t("Создать семью")}</h3><input id="famName" type="text" maxlength="30" placeholder="${t("Название семьи")}" aria-label="${t("Название семьи")}">
       <button class="btn" data-act="createFamily" ${ui.busy ? "disabled" : ""}>${t("Создать")}</button></div>
     <div class="card" style="align-items:stretch"><h3>${t("Присоединиться к семье")}</h3><div class="muted">${t("Второй родитель вводит код семьи, который показан в кабинете первого.")}</div>
@@ -234,13 +243,17 @@ export function vParent(M, ui) {
   const kidList = `<div class="card"><h3>${t("Дети")}</h3>
       ${kids.length ? "" : `<div class="muted">${t("Добавьте первого ребёнка")}</div>`}
       ${kids.map(x => `<div style="display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--line)">
-        <div class="pwrow"><input type="text" maxlength="20" value="${esc(x.name)}" data-kidname="${x.id}" aria-label="${t("Имя ребёнка")}">${ui.delKid === x.id ? `<button class="btn small danger" data-act="delKid" data-id="${x.id}">${t("Точно удалить?")}</button>` : `<button class="nobtn" data-act="delKid" data-id="${x.id}" aria-label="${t("Удалить")}">🗑</button>`}</div>
+        <div class="pwrow"><input type="text" maxlength="20" value="${esc(x.name)}" data-kidname="${x.id}" aria-label="${t("Имя ребёнка")}">${ui.delKid === x.id ? `<span></span>` : `<button class="nobtn" data-act="delKid" data-id="${x.id}" aria-label="${t("Удалить")}">🗑</button>`}</div>
         <div class="muted">${t("Логин")}: <b>${esc(x.login)}</b></div>
+        ${ui.delKid === x.id ? `<div class="notice"><b>${t("Удалить профиль и все данные ребёнка?")}</b><div class="muted">${t("Задания, звёзды и настройки будут удалены. Чтобы удалить и вход ребёнка, введите его пароль. Можно оставить пустым.")}</div>
+          <input type="password" id="delPw-${x.id}" autocomplete="off" placeholder="${t("Пароль ребёнка (необязательно)")}" aria-label="${t("Пароль ребёнка")}">
+          <div class="row" style="flex-wrap:wrap"><button class="btn small danger" data-act="delKid" data-id="${x.id}">${t("Удалить навсегда")}</button><button class="btn small ghost" data-act="delKidCancel">${t("Отмена")}</button></div></div>` : ""}
         <div class="pwrow"><input type="text" id="rp-${x.id}" autocomplete="off" maxlength="40" placeholder="${t("Новый пароль, от 6 символов")}" aria-label="${t("Новый пароль ребёнка")}"><button class="btn small" data-act="resetPw" data-id="${x.id}">${t("Сменить")}</button></div></div>`).join("")}
       <h3 style="margin-top:6px">${t("Добавить ребёнка")}</h3>
       <div class="formrow"><input class="full" type="text" id="nkName" maxlength="20" placeholder="${t("Имя")}" aria-label="${t("Имя")}">
         <input type="text" id="nkLogin" autocapitalize="none" maxlength="20" placeholder="${t("Логин латиницей")}" aria-label="${t("Логин")}">
         <input type="text" id="nkPw" autocomplete="off" maxlength="40" placeholder="${t("Пароль, от 6 символов")}" aria-label="${t("Пароль")}">
+        <div class="full">${consentBox("nkConsent", t("Подтверждаю, что я родитель или законный представитель ребёнка, и даю согласие на обработку его данных по политике конфиденциальности."))}<div class="hint">${legalLinks()}</div></div>
         <button class="btn small full" data-act="addKid" ${ui.busy ? "disabled" : ""}>${t("Добавить ребёнка")}</button></div></div>`;
 
   if (!kids.length) return `${errBox(ui.err)}${pending}${kidList}${famRules}${family}`;
@@ -303,5 +316,20 @@ export function vSettings(S, ui) {
     <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}</div>
     ${S.user ? `<div class="card"><h3>${t("Уведомления")}</h3>${pills("setNotify", ui.notify ? "on" : "off", [["on", t("Включены")], ["off", t("Выключены")]])}
       <div class="hint">${t("Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.")}</div></div>` : ""}
+    ${S.role === "parent" && S.family ? dataCard(S, ui) : ""}
     ${S.user ? `<div class="card"><h3>${t("Аккаунт")}</h3><div class="muted">${esc(S.user.email || "")}</div><button class="btn ghost" data-act="signout">${t("Выйти из аккаунта")}</button></div>` : ""}</div>`;
+}
+
+function dataCard(S, ui) {
+  const two = (S.family.parentUids || []).length > 1, links = legalLinks();
+  const confirm = ui.delStage ? `<div class="notice"><b>${ui.delStage === "family" ? t("Удалить семью и все данные?") : t("Выйти из семьи и удалить свой аккаунт?")}</b>
+      <div class="muted">${ui.delStage === "family" ? t("Будут удалены все профили детей, их задания, звёзды, правила, копилка и ваш аккаунт. Другой родитель потеряет доступ. Это нельзя отменить.") : t("Вы покинете семью, а ваш аккаунт будет удалён. Семья и данные детей останутся у другого родителя.")}</div>
+      <label class="muted" for="delWord">${tf("Для подтверждения введите слово {w}", { w: t("УДАЛИТЬ") })}</label><input type="text" id="delWord" autocomplete="off" autocapitalize="characters">
+      <div class="row" style="flex-wrap:wrap"><button class="btn small danger" data-act="${ui.delStage === "family" ? "deleteFamily" : "leaveFamily"}" ${ui.busy ? "disabled" : ""}>${t("Удалить навсегда")}</button><button class="btn small ghost" data-act="delCancel">${t("Отмена")}</button></div></div>` : "";
+  return `<div class="card"><h3>${t("Данные и удаление")}</h3>
+    ${links ? `<div class="hint">${links}</div>` : ""}
+    <div class="muted">${t("Профиль ребёнка можно удалить в кабинете родителя. Здесь можно удалить всю семью или свой аккаунт.")}</div>
+    ${ui.err && ui.delStage ? `<div class="err" role="alert">${esc(ui.err)}</div>` : ""}
+    ${confirm}
+    ${ui.delStage ? "" : `<div class="row" style="flex-wrap:wrap">${two ? `<button class="btn small ghost" data-act="delStart" data-id="leave">${t("Выйти из семьи и удалить аккаунт")}</button>` : ""}<button class="btn small danger" data-act="delStart" data-id="family">${t("Удалить семью и все данные")}</button></div>`}</div>`;
 }

@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { Capacitor } from "@capacitor/core";
 import { firebaseConfig } from "./config.js";
@@ -38,3 +38,17 @@ export async function createChildAuthUser(email, pw) {
     try { await signOut(secAuth); } catch (e) {}
   }
 }
+
+// Removes a child's sign-in record. Needs the child's password; the parent stays signed in.
+export async function deleteChildAuthUser(email, pw) {
+  const sec = initializeApp(firebaseConfig, "secondary-del-" + Date.now());
+  const secAuth = getAuth(sec);
+  try {
+    const cred = await signInWithEmailAndPassword(secAuth, email, pw);
+    await deleteUser(cred.user);
+  } finally {
+    try { await signOut(secAuth); } catch (e) {}
+  }
+}
+// Deletes the signed-in account (call right after a fresh sign-in).
+export async function deleteCurrentUser() { if (auth.currentUser) await deleteUser(auth.currentUser); }

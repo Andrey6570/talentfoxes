@@ -7,3 +7,8 @@ android/build/
 android/app/build/
 android/capacitor-cordova-android-plugins/
 android/local.properties
+
+# Google Play upload key: kept in a CI secret, never in git
+android/app/upload.jks
+*.b64
+upload-key-secrets.txt

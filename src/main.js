@@ -2,7 +2,7 @@ import "./styles.css";
 import { t, tf, getLang, toggleLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { FEE_CAP_ONCE, newRun, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars } from "./domain.js";
@@ -11,7 +11,7 @@ const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
 const THEME_KEY = "talent-foxes-theme", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
-const ui = { notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const ui = { delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -23,8 +23,11 @@ function errText(e) {
   if (/invalid-credential|wrong-password|user-not-found|invalid-login/.test(c)) return t("Неверный логин или пароль");
   if (/nologin|no-family|bad-account/.test(c)) return t("Такого ребёнка не нашли. Проверьте код семьи и логин.");
   if (/bad-code/.test(c)) return t("Такого кода нет");
+  if (/need-consent/.test(c)) return t("Нужно подтвердить согласие");
+  if (/requires-recent-login/.test(c)) return t("Войдите заново и повторите");
   if (/weak-password/.test(c)) return t("Пароль не короче 6 символов");
   if (/login-taken|email-already/.test(c)) return t("Такой логин уже занят");
+  if (/need-word/.test(c)) return t("Введите слово подтверждения");
   if (/need-name/.test(c)) return t("Нужно имя и логин");
   if (/permission-denied/.test(c)) return t("Нет доступа. Войдите заново.");
   if (/network|unavailable/.test(c)) return t("Нет связи с интернетом");
@@ -160,8 +163,8 @@ const A = {
     ui.kCode = val("kCode"); ui.kLogin = val("kLogin"); const pw = val("kPw");
     run(async () => { await kidSignIn(ui.kCode, ui.kLogin, pw); LS.set("talent-foxes-code", normCode(ui.kCode)); LS.set("talent-foxes-login", ui.kLogin); ui.tab = "home"; });
   },
-  createFamily() { const n = val("famName").trim(); if (!n) return fail({ code: "need-name" }); run(() => createFamily(n.slice(0, 30))); },
-  joinFamily() { const c = val("joinCode"); run(() => joinFamily(c)); },
+  createFamily() { const n = val("famName").trim(); if (!n) return fail({ code: "need-name" }); if (!($("#famConsent") || {}).checked) return fail({ code: "need-consent" }); run(() => createFamily(n.slice(0, 30))); },
+  joinFamily() { const c = val("joinCode"); if (!($("#famConsent") || {}).checked) return fail({ code: "need-consent" }); run(() => joinFamily(c)); },
   renameFamily() { const n = val("famNameEdit").trim(); if (n) run(() => renameFamily(n.slice(0, 30)), "Сохранено"); },
 
   // child
@@ -247,9 +250,17 @@ const A = {
     if (sp === null) return toast(t("Нужна ссылка с open.spotify.com")); if (ym === null) return toast(t("Нужна ссылка с music.yandex.ru"));
     savePlaylists(k, { spotify: sp, yandex: ym }).then(() => toast(t("Плейлисты сохранены"))).catch(fail);
   },
-  addKid() { const n = val("nkName"), l = val("nkLogin"), p = val("nkPw"); run(async () => { const id = await addKid(n, l, p); ui.pk = id; ["nkName", "nkLogin", "nkPw"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); }, "Ребёнок добавлен"); },
+  addKid() { const n = val("nkName"), l = val("nkLogin"), p = val("nkPw"), ok = !!($("#nkConsent") || {}).checked; run(async () => { const id = await addKid(n, l, p, ok); ui.pk = id; ["nkName", "nkLogin", "nkPw"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); const cb = $("#nkConsent"); if (cb) cb.checked = false; }, "Ребёнок добавлен"); },
   resetPw(id) { const k = parentKid(id), pw = val("rp-" + id); if (k && pw) run(() => resetKidPassword(k, pw), "Пароль сохранён"); },
-  delKid(id) { if (ui.delKid !== id) { ui.delKid = id; render(); return; } ui.delKid = null; const k = parentKid(id); if (k) run(() => deleteKid(k)); }
+  delKid(id) {
+    if (ui.delKid !== id) { ui.delKid = id; render(); return; }
+    const k = parentKid(id), pw = val("delPw-" + id); ui.delKid = null; if (k) run(() => deleteKid(k, pw), "Профиль удалён"); else render();
+  },
+  delKidCancel() { ui.delKid = null; render(); },
+  delStart(stage) { ui.delStage = stage; ui.err = ""; render(); },
+  delCancel() { ui.delStage = null; ui.err = ""; render(); },
+  deleteFamily() { if (val("delWord").trim().toUpperCase() !== t("УДАЛИТЬ")) return fail({ code: "need-word" }); run(async () => { await deleteFamilyAndAccount(); ui.settings = false; ui.delStage = null; }); },
+  leaveFamily() { if (val("delWord").trim().toUpperCase() !== t("УДАЛИТЬ")) return fail({ code: "need-word" }); run(async () => { await leaveFamilyAndDeleteAccount(); ui.settings = false; ui.delStage = null; }); }
 };
 
 document.addEventListener("click", e => {

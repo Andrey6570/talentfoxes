@@ -6,7 +6,17 @@ android {
     // One fixed key signs debug and release builds, so the SHA-1 registered in Firebase never changes.
     // The key is committed on purpose for sideloaded family use; do not reuse it for a store listing.
     def keystoreFile = file('talentfoxes.jks')
+    // Upload key for Google Play. It is not stored in the repository: CI restores it from a secret.
+    def uploadKeystore = file('upload.jks')
     signingConfigs {
+        upload {
+            if (uploadKeystore.exists()) {
+                storeFile uploadKeystore
+                storePassword System.getenv('UPLOAD_KEYSTORE_PASSWORD')
+                keyAlias 'talentfoxes-upload'
+                keyPassword System.getenv('UPLOAD_KEYSTORE_PASSWORD')
+            }
+        }
         family {
             if (keystoreFile.exists()) {
                 storeFile keystoreFile
@@ -35,7 +45,8 @@ android {
             if (keystoreFile.exists()) signingConfig signingConfigs.family
         }
         release {
-            if (keystoreFile.exists()) signingConfig signingConfigs.family
+            if (uploadKeystore.exists()) signingConfig signingConfigs.upload
+            else if (keystoreFile.exists()) signingConfig signingConfigs.family
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

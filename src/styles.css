@@ -218,3 +218,8 @@ label.muted { margin-bottom: -6px; }
 .stat:first-child { border-top: 0; }
 .stat b { font-family: var(--f-display); font-size: 18px; }
 .stat.bad b { color: var(--bad); }
+
+/* consent checkbox */
+.check { display: flex; gap: 10px; align-items: flex-start; text-align: left; font-size: 14px; }
+.check input { width: 22px; height: 22px; flex: none; margin-top: 2px; accent-color: var(--accent); }
+.formrow .full { min-width: 0; }

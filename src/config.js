@@ -10,3 +10,8 @@ export const firebaseConfig = {
 };
 
 export const KID_EMAIL_DOMAIN = "kid.talantfoxes.app";
+
+// Version of the privacy policy and terms the user agrees to. Change it when the texts change materially.
+export const POLICY_VERSION = "2026-10";
+// Public address of the folder that holds legal/*.html, with a trailing slash. Fill in once the pages are hosted.
+export const LEGAL_URL = "";

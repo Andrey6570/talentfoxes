@@ -1,8 +1,8 @@
 // Live data from Firestore plus every write the app makes.
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, arrayUnion, increment } from "firebase/firestore";
-import { auth, db, googleSignIn, appSignOut, passwordSignIn, createChildAuthUser } from "./fb.js";
-import { KID_EMAIL_DOMAIN } from "./config.js";
+import { auth, db, googleSignIn, appSignOut, passwordSignIn, createChildAuthUser, deleteChildAuthUser, deleteCurrentUser } from "./fb.js";
+import { KID_EMAIL_DOMAIN, POLICY_VERSION } from "./config.js";
 import { createDetector } from "./changes.js";
 import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid, planFee, defaultRules } from "./domain.js";
 
@@ -117,7 +117,7 @@ export async function kidSignIn(code, loginRaw, pw) {
 // ---- family ----
 export async function createFamily(name) {
   const fid = doc(collection(db, "families")).id, code = newInviteCode(), b = writeBatch(db);
-  b.set(doc(db, "families", fid), { name, parentUids: [M.user.uid], inviteCode: code, createdAt: Date.now() });
+  b.set(doc(db, "families", fid), { name, parentUids: [M.user.uid], inviteCode: code, createdAt: Date.now(), consent: { v: POLICY_VERSION, at: Date.now() } });
   b.set(doc(db, "invites", code), { fid });
   await b.commit();
 }
@@ -129,15 +129,16 @@ export async function joinFamily(codeRaw) {
 export const renameFamily = name => updateDoc(famRef(), { name });
 
 // ---- children (parent) ----
-export async function addKid(name, loginRaw, pw) {
+export async function addKid(name, loginRaw, pw, consent) {
   const login = normLogin(loginRaw), code = M.family.inviteCode;
+  if (!consent) throw new Error("need-consent");
   if (!name.trim() || !login) throw new Error("need-name");
   if (pw.length < 6) throw new Error("weak-password");
   const lg = doc(db, "logins", `${code}__${login}`);
   if ((await getDoc(lg)).exists()) throw new Error("login-taken");
   const kidUid = await createChildAuthUser(kidEmail(login, code, 0, KID_EMAIL_DOMAIN), pw);
   const ref = doc(collection(db, "families", M.family.id, "kids")), b = writeBatch(db);
-  b.set(ref, newKidDoc(name.trim().slice(0, 20), login, kidUid));
+  b.set(ref, Object.assign(newKidDoc(name.trim().slice(0, 20), login, kidUid), { consent: { by: M.user.uid, v: POLICY_VERSION, at: Date.now() } }));
   b.set(lg, { fid: M.family.id, v: 0 });
   await b.commit();
   return ref.id;
@@ -151,13 +152,41 @@ export async function resetKidPassword(kid, pw) {
   b.set(doc(db, "logins", `${code}__${kid.login}`), { fid: M.family.id, v });
   await b.commit();
 }
-export async function deleteKid(kid) {
-  const base = ["families", M.family.id, "kids", kid.id];
-  for (const sub of ["log", "orders"]) {
-    const s = await getDocs(collection(db, ...base, sub));
-    for (let i = 0; i < s.docs.length; i += 400) { const b = writeBatch(db); s.docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); }
+async function deleteSubcollections(base, subs) {
+  for (const sub of subs) {
+    const snap = await getDocs(collection(db, ...base, sub));
+    for (let i = 0; i < snap.docs.length; i += 400) { const b = writeBatch(db); snap.docs.slice(i, i + 400).forEach(d => b.delete(d.ref)); await b.commit(); }
   }
+}
+// With the child's password the sign-in record is deleted too; without it only the data goes.
+export async function deleteKid(kid, childPassword = "") {
+  if (childPassword) await deleteChildAuthUser(kidEmail(kid.login, M.family.inviteCode, kid.authVersion || 0, KID_EMAIL_DOMAIN), childPassword);
+  await deleteSubcollections(["families", M.family.id, "kids", kid.id], ["log", "orders"]);
   const b = writeBatch(db); b.delete(kidRef(kid.id)); b.delete(doc(db, "logins", `${M.family.inviteCode}__${kid.login}`)); await b.commit();
+}
+
+// Deletes the whole family with every child's data, then the parent's own account.
+// Everything needed is copied first: signing in again can reset the live data while this runs.
+export async function deleteFamilyAndAccount() {
+  const fid = M.family.id, code = M.family.inviteCode, kids = M.kids.map(k => ({ id: k.id, login: k.login }));
+  await googleSignIn(); // a fresh sign-in is required before an account can be deleted; stops here if cancelled
+  for (const k of kids) {
+    await deleteSubcollections(["families", fid, "kids", k.id], ["log", "orders"]);
+    const b = writeBatch(db); b.delete(doc(db, "families", fid, "kids", k.id)); b.delete(doc(db, "logins", `${code}__${k.login}`)); await b.commit();
+  }
+  await deleteSubcollections(["families", fid], ["shared"]);
+  await deleteDoc(doc(db, "invites", code));
+  await deleteDoc(doc(db, "families", fid));
+  await deleteCurrentUser();
+  await appSignOut().catch(() => {});
+}
+// A second parent leaves; the family and the other parent stay.
+export async function leaveFamilyAndDeleteAccount() {
+  const fid = M.family.id, me = M.user.uid, rest = (M.family.parentUids || []).filter(u => u !== me);
+  await googleSignIn();
+  await updateDoc(doc(db, "families", fid), { parentUids: rest });
+  await deleteCurrentUser();
+  await appSignOut().catch(() => {});
 }
 export const renameKid = (kid, name) => updateDoc(kidRef(kid.id), { name });
 export const saveTasks = (kid, tasks) => updateDoc(kidRef(kid.id), { tasks });

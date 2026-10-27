@@ -1,0 +1,50 @@
+name: Android release bundle (Google Play)
+
+# Builds the signed .aab that is uploaded to Google Play. Run it by hand: Actions, this workflow, Run workflow.
+on:
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Accept Android licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Restore the upload key
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$UPLOAD_KEYSTORE_BASE64" ]; then echo "The UPLOAD_KEYSTORE_BASE64 secret is missing"; exit 1; fi
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 -d > android/app/upload.jks
+
+      - run: npm ci
+
+      - name: Build the web app and sync it into the Android project
+        run: |
+          npx vite build
+          npx cap sync android
+
+      - name: Build the signed bundle
+        working-directory: android
+        env:
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: ./gradlew bundleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: talent-foxes-aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error

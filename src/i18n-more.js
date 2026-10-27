@@ -65,5 +65,18 @@ export const EN_MORE = {
   "{kid}: задание выполнено": "{kid}: task completed", "{x} · +{n} ★, ждёт проверки": "{x} · +{n} ★, waiting for a check", "{kid}: выбрана награда": "{kid}: reward chosen", "{x} · {n} ★": "{x} · {n} ★",
   "Новое задание": "New task", "{x} · +{n} ★": "{x} · +{n} ★", "Родители подтвердили": "Your parents approved", 
   "Уведомления": "Notifications", "Включены": "On", "Выключены": "Off",
-  "Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.": "Notifications arrive while the app is open or was open recently. If it is closed, new things show up when you open it."
+  "Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.": "Notifications arrive while the app is open or was open recently. If it is closed, new things show up when you open it.",
+  "Политика конфиденциальности": "Privacy Policy", "Условия использования": "Terms of Use",
+  "Принимаю условия использования и политику конфиденциальности.": "I accept the Terms of Use and the Privacy Policy.",
+  "Подтверждаю, что я родитель или законный представитель ребёнка, и даю согласие на обработку его данных по политике конфиденциальности.": "I confirm that I am the child's parent or legal guardian and consent to processing the child's data under the Privacy Policy.",
+  "Нужно подтвердить согласие": "Please confirm your consent", "Войдите заново и повторите": "Sign in again and repeat", "Введите слово подтверждения": "Enter the confirmation word",
+  "Удалить профиль и все данные ребёнка?": "Delete the child's profile and all data?",
+  "Задания, звёзды и настройки будут удалены. Чтобы удалить и вход ребёнка, введите его пароль. Можно оставить пустым.": "Tasks, stars and settings will be deleted. To delete the child's sign-in too, enter their password. You can leave it empty.",
+  "Пароль ребёнка (необязательно)": "Child's password (optional)", "Пароль ребёнка": "Child's password", "Удалить навсегда": "Delete permanently", "Профиль удалён": "Profile deleted",
+  "Данные и удаление": "Data and deletion", "Профиль ребёнка можно удалить в кабинете родителя. Здесь можно удалить всю семью или свой аккаунт.": "A child's profile can be deleted in the parents' area. Here you can delete the whole family or your own account.",
+  "Выйти из семьи и удалить аккаунт": "Leave the family and delete my account", "Удалить семью и все данные": "Delete the family and all data",
+  "Удалить семью и все данные?": "Delete the family and all data?", "Выйти из семьи и удалить свой аккаунт?": "Leave the family and delete your account?",
+  "Будут удалены все профили детей, их задания, звёзды, правила, копилка и ваш аккаунт. Другой родитель потеряет доступ. Это нельзя отменить.": "All children's profiles, their tasks, stars, rules, the pot and your account will be deleted. The other parent will lose access. This cannot be undone.",
+  "Вы покинете семью, а ваш аккаунт будет удалён. Семья и данные детей останутся у другого родителя.": "You will leave the family and your account will be deleted. The family and the children's data stay with the other parent.",
+  "Для подтверждения введите слово {w}": "To confirm, type the word {w}", "УДАЛИТЬ": "DELETE"
 };
