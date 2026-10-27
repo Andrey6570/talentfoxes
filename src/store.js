@@ -212,6 +212,7 @@ export async function addPackRewards(kid, ageId) {
 }
 export const saveRewards = (kid, rewards) => updateDoc(kidRef(kid.id), { rewards });
 export const saveEconomy = (kid, economy) => updateDoc(kidRef(kid.id), { economy });
+export const saveScale = (kid, patch) => updateDoc(kidRef(kid.id), { economy: patch.economy, tasks: patch.tasks, rewards: patch.rewards });
 export const savePlaylists = (kid, playlists) => updateDoc(kidRef(kid.id), { playlists });
 
 // ---- approvals (parent) ----

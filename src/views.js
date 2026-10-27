@@ -2,7 +2,7 @@ import { t, tf, pl, disp, getLang, locale, LANGS } from "./i18n.js";
 import { LEGAL_URL } from "./config.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
-import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, WEEKDAYS, parseDay, fmtDay, addDays, taskOn, hasSchedule, dayItems, taskGcal, gcalUrl, AGES, PACKS, packTasks, packRewards, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
+import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, WEEKDAYS, parseDay, fmtDay, addDays, taskOn, hasSchedule, dayItems, taskGcal, gcalUrl, AGES, PACKS, packTasks, packRewards, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, tierPriceAt, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
 
 import { esc } from "./util.js";
 export { esc };
@@ -319,6 +319,7 @@ export function vParent(M, ui) {
 
   if (!kids.find(x => x.id === ui.pk)) ui.pk = kids[0].id;
   const k = kids.find(x => x.id === ui.pk), wk = week(k), max = Math.max(1, ...wk.map(d => d.move + d.clean));
+  const pend = ui.econPending && ui.econPending.kid === k.id && ui.econPending.n !== k.economy.minutesPerStar ? ui.econPending.n : 0;
   const settings = `${kids.length > 1 ? `<div class="muted">${t("Для кого настраиваем:")}</div>` : ""}
     <div class="pk" role="group">${kids.map(x => `<button class="pill ${x.id === k.id ? "on" : ""}" data-act="pk" data-id="${x.id}">${esc(x.name)}</button>`).join("")}</div>
     <div class="card"><h3>${t("Бонус за старание")}</h3>
@@ -340,7 +341,12 @@ export function vParent(M, ui) {
       <div class="muted">${t("Сколько заданий в день вы ждёте от ребёнка?")}</div>
       <div class="pills" style="justify-content:flex-start">${[...new Set([2, 4, 6, 8, 10, k.economy.tasksPerDay])].sort((a, b) => a - b).map(n => `<button class="pill ${k.economy.tasksPerDay === n ? "on" : ""}" data-act="econTasks" data-id="${n}">${n}</button>`).join("")}</div>
       <div class="muted">${t("1 звезда — это примерно столько минут усилий:")}</div>
-      <div class="pills" style="justify-content:flex-start">${[5, 10, 15].map(n => `<button class="pill ${k.economy.minutesPerStar === n ? "on" : ""}" data-act="econMinutes" data-id="${n}">${tf("{n} мин", { n })}</button>`).join("")}</div>
+      <div class="pills" style="justify-content:flex-start">${[5, 10, 15].map(n => `<button class="pill ${(pend ? pend : k.economy.minutesPerStar) === n ? "on" : ""}" data-act="econMinutes" data-id="${n}">${tf("{n} мин", { n })}</button>`).join("")}</div>
+      ${pend ? `<div class="notice" style="width:100%"><b>${tf("Новый масштаб: 1 ★ = {n} мин", { n: pend })}</b>
+        <div class="muted">${tf("Звёзды всех заданий и цены наград изменятся в ×{f}. Уже заработанные звёзды на счёте не пересчитываются.", { f: Math.round(k.economy.minutesPerStar / pend * 100) / 100 })}</div>
+        <div class="muted">${t("Предпросмотр цен наград:")}</div>
+        <div class="ladder" style="width:100%">${TIERS.map(x => `<div class="rung"><span>${t(x.name)}</span><b>${tierPriceAt(k, x, k.economy.minutesPerStar / pend)} ★</b><span class="muted">${tf("≈ {n} дн.", { n: x.days })}</span></div>`).join("")}</div>
+        <div class="row" style="flex-wrap:wrap"><button class="btn small" data-act="econApply">${t("Пересчитать задания и награды")}</button><button class="btn small ghost" data-act="econOnly">${t("Только для новых заданий")}</button><button class="btn small ghost" data-act="econCancel">${t("Отмена")}</button></div></div>` : ""}
       <div class="econ"><b>${tf("≈ {d} ★ в день, ≈ {w} ★ в неделю", { d: Math.round(dailyStars(k) * 10) / 10, w: Math.round(dailyStars(k) * 7) })}</b><div class="muted">${tf("Это примерно {n} мин усилий в день", { n: Math.round(dailyMinutes(k) / 5) * 5 })}</div></div>
       <div class="muted">${t("Ориентир цен на награды:")}</div>
       <div class="ladder">${TIERS.map(x => `<div class="rung"><span>${t(x.name)}</span><b>${tierPrice(k, x)} ★</b><span class="muted">${tf("≈ {n} дн.", { n: x.days })}</span></div>`).join("")}</div>

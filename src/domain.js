@@ -162,7 +162,13 @@ export function typicalStars(k) {
   if (!a.length) return 2;
   return a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2;
 }
-export const dailyMinutes = k => dailyStars(k) * k.economy.minutesPerStar;
+// Minutes of real effort in a typical day: from the tasks' own minutes when they have them, otherwise from stars and the rate.
+export function typicalMinutes(k) {
+  const m = k.tasks.map(x => x.minutes).filter(x => x > 0).sort((a, b) => a - b);
+  if (!m.length) return typicalStars(k) * k.economy.minutesPerStar;
+  return m.length % 2 ? m[(m.length - 1) / 2] : (m[m.length / 2 - 1] + m[m.length / 2]) / 2;
+}
+export const dailyMinutes = k => k.economy.tasksPerDay * typicalMinutes(k) * SUCCESS_RATE;
 export const dailyStars = k => k.economy.tasksPerDay * typicalStars(k) * SUCCESS_RATE;
 export const roundTidy = n => n < 20 ? Math.max(1, Math.round(n)) : Math.round(n / 5) * 5;
 export const tierPrice = (k, tier) => roundTidy(dailyStars(k) * tier.days);
@@ -170,6 +176,18 @@ export function taskStars(k, minutes, hardId) {
   const f = (HARDNESS.find(h => h.id === hardId) || HARDNESS[1]).f;
   return Math.max(1, Math.min(10, Math.round(minutes / k.economy.minutesPerStar * f)));
 }
+// Changing "1 star = N minutes" for a child who already has tasks and rewards: every task's stars and every reward's
+// price are scaled by the same factor, so the real value of each stays the same. Stars already earned are not touched.
+export function rescaleKid(k, to) {
+  const from = k.economy.minutesPerStar, f = from / to;
+  return {
+    factor: f,
+    economy: Object.assign({}, k.economy, { minutesPerStar: to }),
+    tasks: k.tasks.map(x => Object.assign({}, x, { stars: Math.max(1, Math.min(50, Math.round(x.stars * f))) })),
+    rewards: k.rewards.map(r => Object.assign({}, r, { cost: Math.max(1, roundTidy(r.cost * f)) }))
+  };
+}
+export const tierPriceAt = (k, tier, factor) => Math.max(1, roundTidy(dailyStars(k) * factor * tier.days));
 export const daysToEarn = (k, cost) => { const d = dailyStars(k); return d > 0 ? cost / d : 0; };
 export const priceVerdict = (k, cost) => { const d = daysToEarn(k, cost); return d < 1 ? "cheap" : d > 45 ? "dear" : "ok"; };
 

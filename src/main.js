@@ -2,8 +2,8 @@ import "./styles.css";
 import { t, tf, getLang, setLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
-import { FEE_CAP_ONCE, newRun, reminderPlan, parseDay, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, saveScale, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+import { FEE_CAP_ONCE, newRun, rescaleKid, reminderPlan, parseDay, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars, normLogin } from "./domain.js";
 
@@ -11,7 +11,7 @@ const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
 const THEME_KEY = "talent-foxes-theme", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
-const ui = { sched: null, ntDays: [], hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const ui = { econPending: null, sched: null, ntDays: [], hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -242,7 +242,7 @@ const A = {
   equip(id) { const k = myKid(); savePet(k, Object.assign({}, k.pet, { equipped: equipList(k, id) })).catch(fail); },
 
   // parent
-  pk(id) { ui.pk = id; render(); },
+  pk(id) { ui.pk = id; ui.econPending = null; render(); },
   logOk(id, el) { const k = parentKid(el.dataset.kid), l = k && k.log.find(x => x.id === id); if (l) decideLog(k, l, true).then(() => toast(t("Засчитано!"))).catch(fail); },
   logNo(id, el) { const k = parentKid(el.dataset.kid), l = k && k.log.find(x => x.id === id); if (l) decideLog(k, l, false).catch(fail); },
   orderOk(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "given").catch(fail); },
@@ -299,7 +299,17 @@ const A = {
   },
   bonusUndo(id) { const k = parentKid(ui.pk), l = k && k.log.find(x => x.id === id); if (l) deleteLog(k, l).then(() => toast(t("Бонус отменён"))).catch(fail); },
   econTasks(n) { const k = parentKid(ui.pk); if (k) saveEconomy(k, Object.assign({}, k.economy, { tasksPerDay: +n })).catch(fail); },
-  econMinutes(n) { const k = parentKid(ui.pk); if (k) saveEconomy(k, Object.assign({}, k.economy, { minutesPerStar: +n })).catch(fail); },
+  // a new scale is only previewed first; the parent chooses whether existing tasks and rewards follow it
+  econMinutes(n) { const k = parentKid(ui.pk); if (!k) return; ui.econPending = +n === k.economy.minutesPerStar ? null : { kid: k.id, n: +n }; render(); },
+  econCancel() { ui.econPending = null; render(); },
+  econApply() {
+    const k = parentKid(ui.pk), p = ui.econPending; if (!k || !p) return;
+    saveScale(k, rescaleKid(k, p.n)).then(() => { ui.econPending = null; toast(t("Масштаб звёзд изменён")); render(); }).catch(fail);
+  },
+  econOnly() {
+    const k = parentKid(ui.pk), p = ui.econPending; if (!k || !p) return;
+    saveEconomy(k, Object.assign({}, k.economy, { minutesPerStar: p.n })).then(() => { ui.econPending = null; toast(t("Масштаб сохранён для новых заданий")); render(); }).catch(fail);
+  },
   addTask() {
     const k = parentKid(ui.pk), v = val("ntTitle").trim(); if (!k || !v) return; const kind = val("ntKind"), min = +val("ntMin") || 0;
     const task = { id: uid(), title: v, kind, stars: Math.max(1, Math.min(10, +val("ntStars") || 1)), icon: kind === "move" ? "🏃" : "🧹", repeat: val("ntRepeat") === "once" ? "once" : "daily" };

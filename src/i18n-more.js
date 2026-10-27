@@ -225,5 +225,12 @@ export const EN_MORE = {
   "Небольшая покупка на выбор": "A small purchase of your choice",
   "Язык": "Language",
   "Расчёт: {n} {w} в день × типичные {s} ★ × 70% (ребёнок делает не всё).": "How it is worked out: {n} {w} a day × a typical {s} ★ × 70% (a child does not finish everything).",
-  "задание|задания|заданий": "task|tasks"
+  "задание|задания|заданий": "task|tasks",
+  "Новый масштаб: 1 ★ = {n} мин": "New scale: 1 ★ = {n} min",
+  "Звёзды всех заданий и цены наград изменятся в ×{f}. Уже заработанные звёзды на счёте не пересчитываются.": "The stars of all tasks and the reward prices change by ×{f}. Stars already earned on the balance are not recalculated.",
+  "Предпросмотр цен наград:": "Preview of reward prices:",
+  "Пересчитать задания и награды": "Recalculate tasks and rewards",
+  "Только для новых заданий": "Only for new tasks",
+  "Масштаб звёзд изменён": "Star scale changed",
+  "Масштаб сохранён для новых заданий": "Scale saved for new tasks"
 };
