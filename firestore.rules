@@ -61,6 +61,12 @@ service cloud.firestore {
         allow write: if isParent(fid);
       }
 
+      // family events: parents write, the family's children read
+      match /events/{id} {
+        allow read: if isParent(fid) || isFamilyKid(fid);
+        allow write: if isParent(fid);
+      }
+
       match /kids/{kid} {
         allow read: if isParent(fid) || (signedIn() && resource.data.kidUid == request.auth.uid);
         allow create, delete: if isParent(fid);

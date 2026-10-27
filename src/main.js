@@ -2,8 +2,8 @@ import "./styles.css";
 import { t, tf, getLang, toggleLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
-import { FEE_CAP_ONCE, newRun, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+import { FEE_CAP_ONCE, newRun, reminderPlan, parseDay, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars, normLogin } from "./domain.js";
 
@@ -11,7 +11,7 @@ const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
 const THEME_KEY = "talent-foxes-theme", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
-const ui = { hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const ui = { sched: null, ntDays: [], hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -56,6 +56,34 @@ function applyAccent(k) {
 }
 try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render()); } catch (e) {}
 
+// ---------- reminders from the schedule ----------
+// The next days' reminders are planned on the device with local notifications, so they fire even when the app is closed.
+// Times are approximate to within a few minutes (Android may batch alarms to save battery).
+const REMINDER_ID_FROM = 3000, REMINDER_ID_TO = 4000;
+let reminderHash = "", reminderTimer = null;
+function currentReminderPlan() {
+  if (!ui.notify || !S.user || !S.ready) return [];
+  if (S.role === "kid") { const k = myKid(); return k ? reminderPlan({ role: "kid", kid: k, kids: [k], events: S.events || [] }) : []; }
+  if (S.role === "parent") return reminderPlan({ role: "parent", kids: S.kids, events: S.events || [] });
+  return [];
+}
+function syncReminders() {
+  clearTimeout(reminderTimer);
+  reminderTimer = setTimeout(async () => {
+    const plan = currentReminderPlan(), hash = JSON.stringify(plan.map(p => [p.at, p.title, p.x]));
+    if (hash === reminderHash) return;
+    const L = await localNotifications(); if (!L) return;
+    try {
+      const pending = await L.getPending(), mine = pending.notifications.filter(n => n.id >= REMINDER_ID_FROM && n.id < REMINDER_ID_TO);
+      if (mine.length) await L.cancel({ notifications: mine.map(n => ({ id: n.id })) });
+      reminderHash = hash;
+      if (!plan.length) return;
+      const perm = await L.checkPermissions(); if (perm.display !== "granted") { reminderHash = ""; return; }
+      await L.schedule({ notifications: plan.map((p, i) => ({ id: REMINDER_ID_FROM + i, title: tf(p.title, { x: disp(p.x) }), body: p.body || "", schedule: { at: new Date(p.at), allowWhileIdle: true } })) });
+    } catch (e) { reminderHash = ""; }
+  }, 1500);
+}
+
 // ---------- first-run welcome ----------
 const HELLO_PARENT_KEY = "talent-foxes-hello-parent", helloKidKey = id => "talent-foxes-hello-kid-" + id;
 function maybeHello(k) {
@@ -86,11 +114,12 @@ function render() {
   else if (role === "parent" && !S.family) html = V.vFamilySetup(S, ui);
   else if (role === "parent") html = V.vParent(S, ui);
   else if (!k) html = `<div class="card result"><h3>${t(S.error ? "Не удалось открыть профиль" : "Загрузка…")}</h3><div class="muted">${S.error ? esc(S.error) : ""}</div></div>`;
-  else html = ui.tab === "home" ? V.vHome(k, S.shared) : ui.tab === "tasks" ? V.vTasks(k, ui) : ui.tab === "wheel" ? V.vWheel(k, ui) : V.vShop(k);
+  else html = ui.tab === "home" ? V.vHome(k, S.shared) : ui.tab === "tasks" ? V.vTasks(k, ui) : ui.tab === "plan" ? V.vCalendar(k, S) : ui.tab === "wheel" ? V.vWheel(k, ui) : V.vShop(k);
   if (!typing) $("#view").innerHTML = html;
   $("#view").style.cssText = "display:flex;flex-direction:column;gap:16px";
   if (S.user && S.ready) askNotifyPermission();
   maybeHello(k);
+  syncReminders();
   const hl = $("#hello"); hl.hidden = !ui.hello;
   if (ui.hello) { hl.innerHTML = V.vHello(ui.hello, k); document.body.style.overflow = "hidden"; }
   $("#sync").textContent = S.user ? t("Данные сохраняются в вашей семье и доступны на других устройствах") : "";
@@ -218,6 +247,22 @@ const A = {
   logNo(id, el) { const k = parentKid(el.dataset.kid), l = k && k.log.find(x => x.id === id); if (l) decideLog(k, l, false).catch(fail); },
   orderOk(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "given").catch(fail); },
   orderNo(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "refused").catch(fail); },
+  addEvent() {
+    const title = val("evTitle").trim(), date = val("evDate"); if (!title || !date) return toast(t("Укажите название и дату"));
+    const time = val("evTime"), end = val("evEnd"), who = val("evWho");
+    saveEvent({ title: title.slice(0, 60), date, time, end: time ? end : "", repeat: val("evRepeat"), who: who === "all" ? "all" : [who] })
+      .then(() => { const el = $("#evTitle"); if (el) el.value = ""; toast(t("Событие добавлено")); }).catch(fail);
+  },
+  delEvent(id) { deleteEvent(id).catch(fail); },
+  ntDay(n) { n = +n; ui.ntDays = ui.ntDays.includes(n) ? ui.ntDays.filter(x => x !== n) : ui.ntDays.concat(n).sort(); keepNewTask(); },
+  schedOpen(id) { const k = parentKid(ui.pk), x = k && k.tasks.find(t0 => t0.id === id); if (!x) return; ui.sched = ui.sched && ui.sched.id === id ? null : { id, days: (x.days || []).slice(), time: x.time || "", due: x.due || "" }; render(); },
+  schedDay(n) { n = +n; const d = ui.sched.days; ui.sched.days = d.includes(n) ? d.filter(x => x !== n) : d.concat(n).sort(); ui.sched.time = val("schTime"); render(); },
+  schedCancel() { ui.sched = null; render(); },
+  schedSave() {
+    const k = parentKid(ui.pk), sc = ui.sched; if (!k || !sc) return; const time = val("schTime"), due = $("#schDue") ? val("schDue") : "";
+    const tasks = k.tasks.map(x => x.id !== sc.id ? x : (() => { const y = Object.assign({}, x, { days: x.repeat === "once" ? [] : sc.days, time, due }); if (!y.time) delete y.time; if (!y.due) delete y.due; if (!y.days.length) delete y.days; return y; })());
+    saveTasks(k, tasks).then(() => { ui.sched = null; toast(t("Расписание сохранено")); render(); }).catch(fail);
+  },
   helloNext() { if (ui.hello) { ui.hello.step++; render(); } },
   helloDone() { if (ui.hello) { LS.set(ui.hello.role === "kid" ? helloKidKey(ui.hello.kidId) : HELLO_PARENT_KEY, "1"); ui.hello = null; document.body.style.overflow = ""; render(); } },
   dismissAdded() { ui.justAdded = null; render(); },
@@ -259,7 +304,9 @@ const A = {
     const k = parentKid(ui.pk), v = val("ntTitle").trim(); if (!k || !v) return; const kind = val("ntKind"), min = +val("ntMin") || 0;
     const task = { id: uid(), title: v, kind, stars: Math.max(1, Math.min(10, +val("ntStars") || 1)), icon: kind === "move" ? "🏃" : "🧹", repeat: val("ntRepeat") === "once" ? "once" : "daily" };
     if (min > 0) task.minutes = Math.min(120, Math.round(min));
-    saveTasks(k, k.tasks.concat([task])).then(() => { ["ntTitle", "ntMin"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); }).catch(fail);
+    if (val("ntTime")) task.time = val("ntTime"); if (val("ntDue") && task.repeat === "once") task.due = val("ntDue");
+    if (ui.ntDays.length && task.repeat !== "once") task.days = ui.ntDays.slice();
+    saveTasks(k, k.tasks.concat([task])).then(() => { ui.ntDays = []; render(); ["ntTitle", "ntMin"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); }).catch(fail);
   },
   delTask(id) { const k = parentKid(ui.pk); if (k) saveTasks(k, k.tasks.filter(x => x.id !== id)).catch(fail); },
   addReward() {
@@ -292,6 +339,11 @@ document.addEventListener("click", e => {
   const fn = A[el.dataset.act]; if (fn) fn(el.dataset.id, el);
 });
 // stars follow minutes and difficulty as the parent types; the stars field stays editable
+function keepNewTask() {
+  const ids = ["ntTitle", "ntKind", "ntRepeat", "ntMin", "ntHard", "ntStars", "ntTime", "ntDue"], saved = {};
+  ids.forEach(i => { const el = $("#" + i); if (el) saved[i] = el.value; });
+  render(); ids.forEach(i => { const el = $("#" + i); if (el && saved[i] !== undefined) el.value = saved[i]; });
+}
 function recalcStars() {
   const k = parentKid(ui.pk), m = +val("ntMin"), hint = $("#ntHint"); if (!k || !$("#ntStars")) return;
   if (m > 0) { const n = taskStars(k, m, val("ntHard")); $("#ntStars").value = n; if (hint) hint.textContent = tf("{m} мин, это {n} ★ (1 ★ = {c} мин)", { m, n, c: k.economy.minutesPerStar }); }

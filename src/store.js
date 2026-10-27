@@ -7,7 +7,7 @@ import { createDetector } from "./changes.js";
 import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid, planFee, defaultRules, starterKit, packTasks, packRewards } from "./domain.js";
 
 // role: null (signed out) | "parent" | "kid"
-export const M = { ready: false, user: null, role: null, family: null, kids: [], error: "", shared: { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } } };
+export const M = { ready: false, user: null, role: null, family: null, kids: [], events: [], error: "", shared: { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } } };
 
 let notify = () => {};
 let unsubs = [];
@@ -21,6 +21,7 @@ export const setOnEvent = f => { onEvent = f; };
 const detect = createDetector(() => M.role, ev => onEvent(ev));
 
 function stopAll() {
+  M.events = [];
   detect.reset();
   M.shared = { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } };
   unsubs.forEach(f => f()); unsubs = [];
@@ -63,6 +64,12 @@ function watchShared(fid) {
     notify();
   }, onErr));
 }
+function watchEvents(fid) {
+  unsubs.push(onSnapshot(collection(db, "families", fid, "events"), snap => {
+    M.events = rows(snap).sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")));
+    notify();
+  }, onErr));
+}
 function onErr(e) { M.error = e && e.code ? e.code : String(e); notify(); }
 
 async function loadParent(user) {
@@ -73,7 +80,7 @@ async function loadParent(user) {
     if (!fid) { M.family = null; notify(); return; }
     const first = !M.family || M.family.id !== fid;
     M.family = Object.assign({ id: fid }, d.data());
-    if (first) { watchKids(fid, collection(db, "families", fid, "kids")); watchShared(fid); }
+    if (first) { watchKids(fid, collection(db, "families", fid, "kids")); watchShared(fid); watchEvents(fid); }
     notify();
   }, onErr));
 }
@@ -85,7 +92,7 @@ async function loadKid(user) {
   if (!inv.exists()) throw new Error("no-family");
   const fid = inv.data().fid;
   M.family = { id: fid };
-  watchShared(fid);
+  watchShared(fid); watchEvents(fid);
   watchKids(fid, query(collection(db, "families", fid, "kids"), where("kidUid", "==", user.uid)));
 }
 
@@ -176,7 +183,7 @@ export async function deleteFamilyAndAccount() {
     await deleteSubcollections(["families", fid, "kids", k.id], ["log", "orders"]);
     const b = writeBatch(db); b.delete(doc(db, "families", fid, "kids", k.id)); b.delete(doc(db, "logins", `${code}__${k.login}`)); await b.commit();
   }
-  await deleteSubcollections(["families", fid], ["shared"]);
+  await deleteSubcollections(["families", fid], ["shared", "events"]);
   await deleteDoc(doc(db, "invites", code));
   await deleteDoc(doc(db, "families", fid));
   await deleteCurrentUser();
@@ -216,6 +223,8 @@ export async function decideLog(kid, entry, ok) {
 export const decideOrder = (kid, order, status) => updateDoc(doc(db, "families", M.family.id, "kids", kid.id, "orders", order.id), { status });
 export const giveBonus = (kid, n, why) => addDoc(collection(db, "families", M.family.id, "kids", kid.id, "log"), { type: "bonus", taskId: "bonus", title: why || "Бонус за старание", kind: "bonus", stars: n, status: "done", day: today(), ts: Date.now() });
 const sharedDoc = id => doc(db, "families", M.family.id, "shared", id);
+export const saveEvent = ev => addDoc(collection(db, "families", M.family.id, "events"), Object.assign({ createdAt: Date.now() }, ev));
+export const deleteEvent = id => deleteDoc(doc(db, "families", M.family.id, "events", id));
 export const saveRules = items => setDoc(sharedDoc("rules"), { items });
 export const seedRules = () => saveRules(defaultRules());
 export const saveGoal = (goalTitle, goalCost) => setDoc(sharedDoc("pot"), { goalTitle, goalCost }, { merge: true });

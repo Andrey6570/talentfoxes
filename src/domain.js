@@ -297,3 +297,79 @@ export function starterKit(ageId, economy) {
   const tasks = packTasks(ageId, economy).filter(x => x.sel).map(({ sel, ...x }) => x);
   return { tasks, rewards: packRewards({ tasks, economy }).map(({ tier, ...x }) => x) };
 }
+
+// ---- dates, schedules and family events ----
+// Dates are plain "YYYY-MM-DD" strings in the device's local time. Weekdays are 1 (Monday) to 7 (Sunday).
+export const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const BYDAY = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+export const pad = n => String(n).padStart(2, "0");
+export const parseDay = s => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+export const fmtDay = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+export const addDays = (s, n) => { const d = parseDay(s); d.setDate(d.getDate() + n); return fmtDay(d); };
+export const isoWeekday = s => { const w = parseDay(s).getDay(); return w === 0 ? 7 : w; };
+export const atTime = (s, hhmm) => { const d = parseDay(s), [h, m] = hhmm.split(":").map(Number); d.setHours(h, m, 0, 0); return d; };
+const fmtLocal = d => d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "T" + pad(d.getHours()) + pad(d.getMinutes()) + "00";
+
+// A regular task with weekdays shows only on those days; one-time tasks show until they are done.
+export const taskOn = (tk, day) => tk.repeat === "once" || !(tk.days && tk.days.length) || tk.days.includes(isoWeekday(day));
+export const hasSchedule = tk => !!(tk.time || tk.due || (tk.days && tk.days.length && tk.days.length < 7));
+
+// events: { title, date, time, end, repeat: none|weekly|yearly, who: "all" | [kidId] }
+export function eventOn(ev, day) {
+  if (day < ev.date) return false;
+  if (ev.repeat === "weekly") return isoWeekday(day) === isoWeekday(ev.date);
+  if (ev.repeat === "yearly") return day.slice(5) === ev.date.slice(5);
+  return day === ev.date;
+}
+export const eventFor = (ev, kidId) => !ev.who || ev.who === "all" || (Array.isArray(ev.who) && ev.who.includes(kidId));
+
+// Everything planned for a day: family events and scheduled tasks, ordered by time (untimed first).
+export function dayItems(day, events, kids, forKid = null) {
+  const out = [];
+  events.filter(ev => eventOn(ev, day) && (!forKid || eventFor(ev, forKid.id))).forEach(ev => {
+    const names = forKid || ev.who === "all" || !Array.isArray(ev.who) ? "" : kids.filter(k => ev.who.includes(k.id)).map(k => k.name).join(", ");
+    out.push({ type: "event", id: ev.id, time: ev.time || "", end: ev.end || "", title: ev.title, who: names, ev });
+  });
+  kids.filter(k => !forKid || k.id === forKid.id).forEach(k => k.tasks.filter(tk => hasSchedule(tk) && taskOn(tk, day) && (tk.repeat !== "once" || !tk.due || tk.due === day) && !isOnceDone(k, tk)).forEach(tk => {
+    out.push({ type: "task", id: tk.id, time: tk.time || "", title: tk.title, who: forKid ? "" : k.name, task: tk, kid: k });
+  }));
+  return out.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+}
+
+// Reminders for the next days. They are scheduled on the device itself, so they work with the app closed.
+export const REMIND_BEFORE_MIN = 10, REMIND_DAYS = 7, REMIND_MAX = 60, ALLDAY_REMIND_AT = "09:00";
+export function reminderPlan({ role, kid, kids, events, now = new Date() }) {
+  const today0 = fmtDay(now), out = [];
+  for (let i = 0; i < REMIND_DAYS; i++) {
+    const day = addDays(today0, i);
+    const items = role === "kid" ? dayItems(day, events, [kid], kid) : dayItems(day, events, kids).filter(x => x.type === "event");
+    items.forEach(x => {
+      if (x.type === "task") {
+        if (!x.time || (i === 0 && statusOf(kid, x.id, x.task.repeat) === "done")) return;
+        out.push({ at: atTime(day, x.time).getTime(), title: "Пора: {x}", x: x.title });
+      } else if (x.time) out.push({ at: atTime(day, x.time).getTime() - REMIND_BEFORE_MIN * 60000, title: "Скоро: {x}", x: x.title, body: x.time });
+      else out.push({ at: atTime(day, ALLDAY_REMIND_AT).getTime(), title: "Сегодня: {x}", x: x.title });
+    });
+  }
+  return out.filter(r => r.at > now.getTime() + 30000).sort((a, b) => a.at - b.at).slice(0, REMIND_MAX);
+}
+
+// A prefilled Google Calendar event (no sign-in or API: the person just taps Save)
+export function gcalUrl({ title, details = "", day, time = "", end = "", repeat = "none", days = null }, tz = "") {
+  const q = ["action=TEMPLATE", "text=" + encodeURIComponent(title)];
+  if (time) {
+    const s = atTime(day, time), e = end ? atTime(day, end) : new Date(s.getTime() + 30 * 60000);
+    q.push("dates=" + fmtLocal(s) + "/" + fmtLocal(e)); if (tz) q.push("ctz=" + encodeURIComponent(tz));
+  } else q.push("dates=" + day.replace(/-/g, "") + "/" + addDays(day, 1).replace(/-/g, ""));
+  if (details) q.push("details=" + encodeURIComponent(details));
+  const rule = repeat === "weekly" ? "FREQ=WEEKLY" : repeat === "yearly" ? "FREQ=YEARLY" : repeat === "daily" ? "FREQ=DAILY"
+    : repeat === "byday" && days && days.length ? "FREQ=WEEKLY;BYDAY=" + days.map(d => BYDAY[d - 1]).join(",") : "";
+  if (rule) q.push("recur=" + encodeURIComponent("RRULE:" + rule));
+  return "https://calendar.google.com/calendar/render?" + q.join("&");
+}
+export function taskGcal(tk, from = fmtDay(new Date()), tz = "") {
+  if (tk.repeat === "once") return gcalUrl({ title: tk.title, day: tk.due || from, time: tk.time || "" }, tz);
+  let day = from; for (let i = 0; i < 7 && !taskOn(tk, day); i++) day = addDays(day, 1);
+  const days = tk.days && tk.days.length && tk.days.length < 7 ? tk.days : null;
+  return gcalUrl({ title: tk.title, day, time: tk.time || "", repeat: days ? "byday" : "daily", days }, tz);
+}

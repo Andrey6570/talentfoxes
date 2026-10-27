@@ -2,7 +2,7 @@ import { t, tf, pl, disp, getLang } from "./i18n.js";
 import { LEGAL_URL } from "./config.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
-import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, AGES, PACKS, packTasks, packRewards, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
+import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, WEEKDAYS, parseDay, fmtDay, addDays, taskOn, hasSchedule, dayItems, taskGcal, gcalUrl, AGES, PACKS, packTasks, packRewards, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
 
 import { esc } from "./util.js";
 export { esc };
@@ -13,6 +13,7 @@ const PLAIN = { id: "x", pet: { color: "fox", equipped: [], owned: [], name: "" 
 export const TABS = [
   { id: "home", name: "Питомец", svg: '<circle cx="7" cy="9" r="2.2"/><circle cx="17" cy="9" r="2.2"/><circle cx="4" cy="14" r="2"/><circle cx="20" cy="14" r="2"/><path d="M12 12c-3 0-5 3-5 5.5 0 1.6 1.4 2.5 3 2 1-.3 1.3-.5 2-.5s1 .2 2 .5c1.6.5 3-.4 3-2C17 15 15 12 12 12z"/>' },
   { id: "tasks", name: "Задания", svg: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8 12.5l3 3 5-6"/>' },
+  { id: "plan", name: "Календарь", svg: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/>' },
   { id: "wheel", name: "Колесо", svg: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16M6.3 6.3l11.4 11.4M17.7 6.3L6.3 17.7"/>' },
   { id: "shop", name: "Магазин", svg: '<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/>' }
 ];
@@ -60,7 +61,7 @@ function taskCard(k, tk) {
   const st = statusOf(k, tk.id, tk.repeat);
   const right = st === "done" ? `<div class="state ok">${t("Засчитано")}</div>` : st === "pending" ? `<div class="state wait">${t("Ждёт проверки")}</div>`
     : `<button class="btn small" data-act="submit" data-id="${esc(tk.id)}">${st === "rejected" ? t("Ещё раз") : t("Сделано!")}</button>`;
-  return `<div class="task ${tk.kind}"><div class="ic">${esc(tk.icon || "⭐")}</div><div class="grow"><div class="t">${esc(disp(tk.title))}</div><span class="reward-line">${STAR}+${tk.stars}${tk.minutes ? ` · ${tf("≈ {n} мин", { n: tk.minutes })}` : ""}${tk.repeat === "once" ? ` · <b class="once">${t("разовое")}</b>` : ""}</span></div>${right}</div>`;
+  return `<div class="task ${tk.kind}"><div class="ic">${esc(tk.icon || "⭐")}</div><div class="grow"><div class="t">${esc(disp(tk.title))}</div><span class="reward-line">${STAR}+${tk.stars}${tk.minutes ? ` · ${tf("≈ {n} мин", { n: tk.minutes })}` : ""}${tk.time ? ` · ${tf("в {x}", { x: tk.time })}` : ""}${tk.due ? ` · ${tf("до {x}", { x: dayLabel(tk.due, false) })}` : ""}${tk.repeat === "once" ? ` · <b class="once">${t("разовое")}</b>` : ""}</span></div>${right}</div>`;
 }
 
 export function musicLinks(k) {
@@ -149,7 +150,7 @@ function timerHtml(k, ui) {
 }
 
 export function vTasks(k, ui) {
-  const open = k.tasks.filter(x => !isOnceDone(k, x)), mv = open.filter(x => x.kind === "move"), cl = [zoneTask()].concat(open.filter(x => x.kind === "clean"));
+  const open = k.tasks.filter(x => !isOnceDone(k, x) && taskOn(x, today())), mv = open.filter(x => x.kind === "move"), cl = [zoneTask()].concat(open.filter(x => x.kind === "clean"));
   return `<div class="sectionhead"><span class="tag move">${t("Движение")}</span></div>
     <div style="display:flex;flex-direction:column;gap:10px">${mv.map(x => taskCard(k, x)).join("") || `<div class="muted">${t("Заданий пока нет")}</div>`}</div>
     <div class="sectionhead" style="margin-top:8px"><span class="tag clean">${t("Уборка")}</span></div>
@@ -184,6 +185,57 @@ export function vShop(k) {
   const mine = k.orders.filter(o => o.status === "pending" && o.kind === "reward");
   return `<h2>${t("Награды от родителей")}</h2>${mine.length ? `<div class="card"><h3>${t("Ждут выдачи")}</h3>${mine.map(o => `<div>${esc(o.icon || "🎁")} ${esc(t(o.title))}</div>`).join("")}</div>` : ""}
     <div class="grid2">${rw}</div><h2 style="margin-top:8px">${t("Гардероб питомца")}</h2><div class="grid2">${ac}</div>`;
+}
+
+// ---------- calendar ----------
+const tzName = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return ""; } };
+export function dayLabel(day, withRelative = true) {
+  const l = getLang() === "ru" ? "ru" : "en-GB", d = parseDay(day), now = fmtDay(new Date());
+  const base = new Intl.DateTimeFormat(l, { weekday: "short", day: "numeric", month: "short" }).format(d);
+  if (!withRelative) return base;
+  return day === now ? t("Сегодня") + ", " + base : day === addDays(now, 1) ? t("Завтра") + ", " + base : base;
+}
+const gcalLink = (href, label) => `<a class="btn small ghost" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+function agendaRows(items, parentView) {
+  return items.map(x => `<div class="pending agenda"><div class="grow"><div>${x.time ? `<b class="when">${esc(x.time)}${x.end ? "–" + esc(x.end) : ""}</b> ` : ""}${x.type === "task" ? "✅ " : ""}${esc(disp(x.title))}${x.who ? ` <span class="kidtag">${esc(x.who)}</span>` : ""}</div>
+      ${x.type === "event" && x.ev.repeat !== "none" && x.ev.repeat ? `<div class="muted">${t(x.ev.repeat === "weekly" ? "каждую неделю" : "каждый год")}</div>` : ""}</div>
+      ${parentView && x.type === "event" ? gcalLink(gcalUrl({ title: x.title, day: x.ev.date, time: x.ev.time, end: x.ev.end, repeat: x.ev.repeat }, tzName()), t("В Google Календарь")) : ""}
+      ${parentView && x.type === "event" ? `<button class="nobtn" data-act="delEvent" data-id="${esc(x.id)}" aria-label="${t("Удалить")}">🗑</button>` : ""}</div>`).join("");
+}
+export function vCalendar(k, S) {
+  const today0 = fmtDay(new Date()), days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(today0, i));
+  const blocks = days.map(day => { const items = dayItems(day, S.events || [], [k], k); return `<div class="card"><h3>${dayLabel(day)}</h3>${items.length ? agendaRows(items, false) : `<div class="muted">${t("Ничего не запланировано")}</div>`}</div>`; });
+  return `<h2>${t("Календарь")}</h2>${blocks.join("")}`;
+}
+export function calCard(S, ui) {
+  const today0 = fmtDay(new Date()), days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(today0, i)), kids = S.kids, events = S.events || [];
+  const week = days.map(day => { const items = dayItems(day, events, kids); return `<div><h3 style="font-size:15px">${dayLabel(day)}</h3>${items.length ? agendaRows(items, true) : `<div class="muted">${t("Ничего не запланировано")}</div>`}</div>`; }).join("");
+  return `<div class="card"><h3>${t("Семейный календарь")}</h3>
+      <div class="muted">${t("Здесь события семьи и задания по расписанию. Напоминания приходят на телефоны за 10 минут до начала.")}</div>${week}
+      <h3 style="margin-top:6px">${t("Новое событие")}</h3>
+      <div class="formrow"><input class="full" type="text" id="evTitle" maxlength="60" placeholder="${t("Название события")}" aria-label="${t("Название события")}">
+        <input type="date" id="evDate" value="${today0}" aria-label="${t("Дата")}">
+        <select id="evRepeat" aria-label="${t("Повтор")}"><option value="none">${t("Один раз")}</option><option value="weekly">${t("Каждую неделю")}</option><option value="yearly">${t("Каждый год")}</option></select>
+        <input type="time" id="evTime" aria-label="${t("Начало")}"><input type="time" id="evEnd" aria-label="${t("Конец")}">
+        <select id="evWho" class="full" aria-label="${t("Для кого")}"><option value="all">${t("Для всей семьи")}</option>${kids.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}</select>
+        <div class="hint full">${t("Без времени событие считается на весь день.")}</div>
+        <button class="btn small full" data-act="addEvent">${t("Добавить событие")}</button></div></div>`;
+}
+// schedule editor for one task in the parents' list
+function schedLabel(x) {
+  const parts = [];
+  if (x.days && x.days.length && x.days.length < 7) parts.push(x.days.map(d => t(WEEKDAYS[d - 1])).join(" "));
+  if (x.time) parts.push(x.time); if (x.due) parts.push(tf("до {x}", { x: dayLabel(x.due, false) }));
+  return parts.join(" · ");
+}
+const dayChips = (sel, act) => `<div class="pills" style="justify-content:flex-start" role="group" aria-label="${t("Дни недели")}">${WEEKDAYS.map((d, i) => `<button class="pill ${sel.includes(i + 1) ? "on" : ""}" data-act="${act}" data-id="${i + 1}">${t(d)}</button>`).join("")}</div>`;
+function taskRow(k, x, ui) {
+  const open = ui.sched && ui.sched.id === x.id, sc = schedLabel(x);
+  const editor = open ? `<div class="notice" style="width:100%"><b>${t("Расписание")}</b>${x.repeat === "once" ? `<label class="muted" for="schDue">${t("Срок")}</label><input type="date" id="schDue" value="${esc(ui.sched.due || "")}">` : `<div class="muted">${t("Дни недели (если не отмечено, то каждый день)")}</div>${dayChips(ui.sched.days, "schedDay")}`}
+      <label class="muted" for="schTime">${t("Время напоминания")}</label><input type="time" id="schTime" value="${esc(ui.sched.time || "")}">
+      <div class="row" style="flex-wrap:wrap"><button class="btn small" data-act="schedSave">${t("Сохранить")}</button><button class="btn small ghost" data-act="schedCancel">${t("Отмена")}</button>${gcalLink(taskGcal(Object.assign({}, x, { days: ui.sched.days, time: ui.sched.time || x.time }), fmtDay(new Date()), tzName()), t("В Google Календарь"))}</div></div>` : "";
+  return `<div class="pending" style="flex-wrap:wrap"><div class="grow">${esc(x.icon || "")} ${esc(disp(x.title))}<div class="muted">${tf(x.kind === "move" ? "Движение · {n}★" : "Уборка · {n}★", { n: x.stars })}${x.minutes ? " · " + tf("≈ {n} мин", { n: x.minutes }) : ""} · ${t(x.repeat === "once" ? (isOnceDone(k, x) ? "разовое, выполнено" : "разовое") : "каждый день")}${sc ? " · " + sc : ""}</div></div>
+    <button class="btn small ghost" data-act="schedOpen" data-id="${esc(x.id)}" aria-label="${t("Расписание")}">🕒</button><button class="nobtn" data-act="delTask" data-id="${esc(x.id)}" aria-label="${t("Удалить")}">🗑</button>${editor}</div>`;
 }
 
 // ---------- parent cabinet ----------
@@ -263,7 +315,7 @@ export function vParent(M, ui) {
         <div class="full">${consentBox("nkConsent", t("Подтверждаю, что я родитель или законный представитель ребёнка, и даю согласие на обработку его данных по политике конфиденциальности."))}<div class="hint">${legalLinks()}</div></div>
         <button class="btn small full" data-act="addKid" ${ui.busy ? "disabled" : ""}>${t("Добавить ребёнка")}</button></div></div>`;
 
-  if (!kids.length) return `${errBox(ui.err)}${start}${kidList}${pending}${famRules}${family}`;
+  if (!kids.length) return `${errBox(ui.err)}${start}${kidList}${pending}${calCard(M, ui)}${famRules}${family}`;
 
   if (!kids.find(x => x.id === ui.pk)) ui.pk = kids[0].id;
   const k = kids.find(x => x.id === ui.pk), wk = week(k), max = Math.max(1, ...wk.map(d => d.move + d.clean));
@@ -303,13 +355,15 @@ export function vParent(M, ui) {
       <div class="ladder">${packRewards(k).map(r => `<div class="rung"><span>${esc(r.icon)} ${esc(t(r.title))}</span><b>${r.cost} ★</b><span class="muted">${k.rewards.some(x => x.id === r.id) ? t("уже добавлено") : ""}</span></div>`).join("")}</div>
       <button class="btn small" data-act="addPackRewards">${t("Добавить готовые награды")}</button></div>
     <div class="card"><h3>${t("Задания")}</h3>
-      ${k.tasks.map(x => `<div class="pending"><div class="grow">${esc(x.icon || "")} ${esc(disp(x.title))}<div class="muted">${tf(x.kind === "move" ? "Движение · {n}★" : "Уборка · {n}★", { n: x.stars })}${x.minutes ? " · " + tf("≈ {n} мин", { n: x.minutes }) : ""} · ${t(x.repeat === "once" ? (isOnceDone(k, x) ? "разовое, выполнено" : "разовое") : "каждый день")}</div></div><button class="nobtn" data-act="delTask" data-id="${esc(x.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
+      ${k.tasks.map(x => taskRow(k, x, ui)).join("")}
       <div class="formrow"><input class="full" type="text" id="ntTitle" placeholder="${t("Новое задание")}" maxlength="60" aria-label="${t("Новое задание")}">
         <select id="ntKind" aria-label="${t("Тип задания")}"><option value="move">${t("Движение")}</option><option value="clean">${t("Уборка")}</option></select>
         <select id="ntRepeat" aria-label="${t("Как часто")}"><option value="daily">${t("Каждый день")}</option><option value="once">${t("Разовое")}</option></select>
         <input type="number" id="ntMin" min="1" max="120" placeholder="${t("Минут")}" aria-label="${t("Сколько минут")}">
         <select id="ntHard" aria-label="${t("Сложность")}">${HARDNESS.map(h => `<option value="${h.id}" ${h.id === "normal" ? "selected" : ""}>${t(h.name)}</option>`).join("")}</select>
         <input type="number" id="ntStars" min="1" max="10" value="2" aria-label="${t("Звёзд")}">
+        <input type="time" id="ntTime" aria-label="${t("Время напоминания")}"><input type="date" id="ntDue" aria-label="${t("Срок (для разового)")}">
+        <div class="full"><div class="muted">${t("Дни недели (если не отмечено, то каждый день)")}</div>${dayChips(ui.ntDays, "ntDay")}</div>
         <div class="hint full" id="ntHint">${t("Звёзды считаются сами по минутам и сложности. Их можно поправить вручную.")}</div>
         <button class="btn small full" data-act="addTask">${t("Добавить задание")}</button></div></div>
     <div class="card"><h3>${t("Награды")}</h3>
@@ -321,7 +375,7 @@ export function vParent(M, ui) {
       <input type="text" id="plSp" value="${esc(k.playlists.spotify)}" placeholder="https://open.spotify.com/playlist/…" aria-label="${t("Ссылка Spotify")}">
       <input type="text" id="plYm" value="${esc(k.playlists.yandex)}" placeholder="https://music.yandex.ru/users/…/playlists/…" aria-label="${t("Ссылка Яндекс Музыки")}">
       <button class="btn small" data-act="setPlaylists">${t("Сохранить плейлисты")}</button></div>`;
-  return `${errBox(ui.err)}${added}${pending}${settings}${famRules}${kidList}${family}`;
+  return `${errBox(ui.err)}${added}${pending}${calCard(M, ui)}${settings}${famRules}${kidList}${family}`;
 }
 
 // ---------- settings ----------
