@@ -9,8 +9,8 @@ import * as h from "./handlers.js";
 initializeApp();
 const deps = { db: getFirestore(), messaging: getMessaging(), auth: getAuth() };
 
-// Firestore triggers must run where the database lives: the multi-region eur3 (Europe).
-const region = "eur3";
+// Functions run in a regular region close to the database (Firestore multi-region eur3 is Europe).
+const region = "europe-west1";
 const LOG = "families/{fid}/kids/{kidId}/log/{id}", ORDER = "families/{fid}/kids/{kidId}/orders/{id}", KID = "families/{fid}/kids/{kidId}";
 
 export const logCreated = onDocumentCreated({ document: LOG, region }, e => h.onLogCreated(deps, { fid: e.params.fid, kidId: e.params.kidId, data: e.data && e.data.data() }));

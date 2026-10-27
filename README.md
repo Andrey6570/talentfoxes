@@ -78,7 +78,7 @@ families/{fid}/kids/{kidId}/orders   покупки наград и одежды
 
 ## Push-уведомления (тариф Blaze)
 
-Серверная часть лежит в `functions/` (Cloud Functions, Node 22, регион `eur3`). Она шлёт уведомления через Firebase Cloud
+Серверная часть лежит в `functions/` (Cloud Functions, Node 22, регион `europe-west1`). Она шлёт уведомления через Firebase Cloud
 Messaging и убирает за собой записи входа детей:
 
 | Событие в базе | Кому уведомление |
