@@ -1,5 +1,6 @@
 import { t, tf, pl, disp, getLang, locale, LANGS } from "./i18n.js";
 import { LEGAL_URL } from "./config.js";
+import { GUIDE, FAQ } from "./help.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
 import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, WEEKDAYS, parseDay, fmtDay, addDays, taskOn, hasSchedule, dayItems, taskGcal, gcalUrl, AGES, PACKS, packTasks, packRewards, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, tierPriceAt, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
@@ -390,6 +391,7 @@ export function vSettings(S, ui) {
   return `<div class="in"><div class="row"><h2 class="grow">${t("Настройки")}</h2><button class="btn small ghost" data-act="closeSettings">${t("Закрыть")}</button></div>
     <div class="card"><h3>${t("Язык")}</h3>${pills("setLang", getLang(), LANGS)}</div>
     <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}</div>
+    <div class="card"><h3>${t("Справка")}</h3><button class="btn ghost" data-act="openHelp">${t("Инструкция и частые вопросы")}</button>${S.user ? `<button class="btn small ghost" data-act="helloAgain">${t("Показать приветствие снова")}</button>` : ""}</div>
     ${S.user ? `<div class="card"><h3>${t("Уведомления")}</h3>${pills("setNotify", ui.notify ? "on" : "off", [["on", t("Включены")], ["off", t("Выключены")]])}
       <div class="hint">${t("Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.")}</div></div>` : ""}
     ${S.role === "parent" && S.family ? dataCard(S, ui) : ""}
@@ -429,4 +431,19 @@ export function vHello(h, k) {
       <div class="dots">${HELLO_PARENT.map((_, i) => `<i class="${i === h.step ? "on" : ""}"></i>`).join("")}</div>
       <button class="btn" data-act="${last ? "helloDone" : "helloNext"}">${t(last ? "Начать" : "Дальше")}</button>
       ${last ? "" : `<button class="btn ghost" data-act="helloDone">${t("Пропустить")}</button>`}</div>`;
+}
+
+// ---------- help: step-by-step guide and FAQ ----------
+export function vHelp(S, ui) {
+  const who = ui.helpWho || (S.role === "kid" ? "kid" : "parent"), tab = ui.helpTab || "guide";
+  const list = (tab === "guide" ? GUIDE : FAQ)[who] || [];
+  const pill = (act, cur, items) => `<div class="pills" style="justify-content:flex-start" role="group">${items.map(([id, name]) => `<button class="pill ${cur === id ? "on" : ""}" data-act="${act}" data-id="${id}">${t(name)}</button>`).join("")}</div>`;
+  const items = list.map(([q, a], i) => {
+    const key = tab + "-" + who + "-" + i, open = ui.helpOpen.has(key) || (!ui.helpTouched && tab === "guide" && i === 0);
+    return `<details class="qa" data-qa="${key}" ${open ? "open" : ""}><summary>${tab === "guide" ? `<span class="num">${i + 1}</span>` : ""}${esc(t(q))}</summary><p>${esc(t(a))}</p></details>`;
+  }).join("");
+  return `<div class="in"><div class="row"><h2 class="grow">${t("Справка")}</h2><button class="btn small ghost" data-act="closeHelp">${t("Назад")}</button></div>
+    ${pill("helpTab", tab, [["guide", "Как пользоваться"], ["faq", "Частые вопросы"]])}
+    ${pill("helpWho", who, [["parent", "Для родителей"], ["kid", "Для ребёнка"]])}
+    <div class="qalist">${items || `<div class="muted">${t("Ничего не найдено")}</div>`}</div></div>`;
 }

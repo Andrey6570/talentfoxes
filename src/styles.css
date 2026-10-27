@@ -239,3 +239,13 @@ label.muted { margin-bottom: -6px; }
 .agenda .grow { flex: 1 1 100%; }
 .when { font-variant-numeric: tabular-nums; }
 .tab { font-size: 11px; }
+
+/* help */
+.qalist { display: flex; flex-direction: column; gap: 10px; }
+details.qa { background: var(--surface); border-radius: 16px; padding: 4px 14px; box-shadow: var(--shadow); }
+details.qa summary { list-style: none; cursor: pointer; font-weight: 800; padding: 10px 24px 10px 0; position: relative; overflow-wrap: anywhere; display: flex; gap: 10px; align-items: baseline; }
+details.qa summary::-webkit-details-marker { display: none; }
+details.qa summary::after { content: "+"; position: absolute; right: 0; top: 8px; font-size: 22px; color: var(--accent); }
+details.qa[open] summary::after { content: "−"; }
+details.qa p { margin: 0 0 12px; font-weight: 600; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.num { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 13px; display: grid; place-items: center; }

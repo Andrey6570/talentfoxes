@@ -11,7 +11,7 @@ const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
 const THEME_KEY = "talent-foxes-theme", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
-const ui = { econPending: null, sched: null, ntDays: [], hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const ui = { settingsPage: null, helpTab: "guide", helpWho: null, helpOpen: new Set(), helpTouched: false, econPending: null, sched: null, ntDays: [], hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -99,7 +99,7 @@ function render() {
   const role = S.role, k = role === "kid" ? myKid() : null;
   applyAccent(k);
   $("#setBtn").textContent = "⚙ " + t("Настройки");
-  const sh = $("#sheet"); sh.hidden = !ui.settings; if (ui.settings) sh.innerHTML = V.vSettings(S, ui);
+  const sh = $("#sheet"); sh.hidden = !ui.settings; if (ui.settings) sh.innerHTML = ui.settingsPage === "help" ? V.vHelp(S, ui) : V.vSettings(S, ui);
   document.body.style.overflow = ui.settings ? "hidden" : "";
   $("#whoChip").hidden = !S.user;
   $("#whoChip").textContent = role === "kid" ? (k ? k.name : "") : (S.family ? S.family.name : "");
@@ -191,11 +191,16 @@ function equipList(k, id) {
 }
 const A = {
   openSettings() { ui.settings = true; render(); },
-  closeSettings() { ui.settings = false; render(); },
+  closeSettings() { ui.settings = false; ui.settingsPage = null; render(); },
+  openHelp() { ui.settingsPage = "help"; render(); },
+  closeHelp() { ui.settingsPage = null; render(); },
+  helpTab(id) { ui.helpTab = id; render(); },
+  helpWho(id) { ui.helpWho = id; render(); },
+  helloAgain() { ui.settings = false; ui.settingsPage = null; ui.hello = S.role === "kid" && myKid() ? { role: "kid", kidId: myKid().id } : { role: "parent", step: 0 }; render(); },
   setLang(id) { setLang(id); render(); },
   setNotify(id) { ui.notify = id === "on"; LS.set(NOTIFY_KEY, id); if (ui.notify) { LS.set(ASKED_KEY, ""); askNotifyPermission(); } render(); },
   setTheme(id) { ui.theme = id; LS.set(THEME_KEY, id); applyTheme(); render(); },
-  signout() { cancelTimerEnd(); ui.settings = false; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
+  signout() { cancelTimerEnd(); ui.settings = false; ui.settingsPage = null; ui.welcome = "choose"; ui.run = null; ui.pick = null; ui.err = ""; signOutAll().catch(() => {}); },
   welcomeKid() { ui.welcome = "kid"; ui.err = ""; render(); },
   welcomeBack() { ui.welcome = "choose"; ui.err = ""; render(); },
   parentLogin() { run(() => parentSignIn()); },
@@ -368,6 +373,11 @@ document.addEventListener("change", e => {
   else if (tg.id === "nrTier") { if (tg.value) { const c = $("#nrCost"); if (c) c.value = tg.value; } }
   else if (tg.dataset && tg.dataset.kidname) { const k = parentKid(tg.dataset.kidname), v = tg.value.trim(); if (k && v) renameKid(k, v.slice(0, 20)).catch(fail); }
 });
+// remember which help items are open, so a refresh of the screen does not fold them
+document.addEventListener("toggle", e => {
+  const el = e.target;
+  if (el && el.dataset && el.dataset.qa) { ui.helpTouched = true; if (el.open) ui.helpOpen.add(el.dataset.qa); else ui.helpOpen.delete(el.dataset.qa); }
+}, true);
 document.addEventListener("keydown", e => { if (e.key === "Enter" && (e.target.id === "kPw")) A.kidLogin(); });
 
 if (demoState) render(); else { render(); start(() => render()); }
