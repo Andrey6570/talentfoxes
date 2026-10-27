@@ -4,7 +4,7 @@ import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
 import { auth, db, googleSignIn, appSignOut, passwordSignIn, createChildAuthUser, deleteChildAuthUser, deleteCurrentUser } from "./fb.js";
 import { KID_EMAIL_DOMAIN, POLICY_VERSION } from "./config.js";
 import { createDetector } from "./changes.js";
-import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid, planFee, defaultRules } from "./domain.js";
+import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid, planFee, defaultRules, starterKit, packTasks, packRewards } from "./domain.js";
 
 // role: null (signed out) | "parent" | "kid"
 export const M = { ready: false, user: null, role: null, family: null, kids: [], error: "", shared: { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } } };
@@ -129,7 +129,7 @@ export async function joinFamily(codeRaw) {
 export const renameFamily = name => updateDoc(famRef(), { name });
 
 // ---- children (parent) ----
-export async function addKid(name, loginRaw, pw, consent) {
+export async function addKid(name, loginRaw, pw, consent, ageId) {
   const login = normLogin(loginRaw), code = M.family.inviteCode;
   if (!consent) throw new Error("need-consent");
   if (!name.trim() || !login) throw new Error("need-name");
@@ -138,7 +138,9 @@ export async function addKid(name, loginRaw, pw, consent) {
   if ((await getDoc(lg)).exists()) throw new Error("login-taken");
   const kidUid = await createChildAuthUser(kidEmail(login, code, 0, KID_EMAIL_DOMAIN), pw);
   const ref = doc(collection(db, "families", M.family.id, "kids")), b = writeBatch(db);
-  b.set(ref, Object.assign(newKidDoc(name.trim().slice(0, 20), login, kidUid), { consent: { by: M.user.uid, v: POLICY_VERSION, at: Date.now() } }));
+  const doc0 = newKidDoc(name.trim().slice(0, 20), login, kidUid), kit = starterKit(ageId, doc0.economy);
+  if (kit) { doc0.tasks = kit.tasks; doc0.rewards = kit.rewards; doc0.age = ageId; }
+  b.set(ref, Object.assign(doc0, { consent: { by: M.user.uid, v: POLICY_VERSION, at: Date.now() } }));
   b.set(lg, { fid: M.family.id, v: 0 });
   await b.commit();
   return ref.id;
@@ -190,6 +192,17 @@ export async function leaveFamilyAndDeleteAccount() {
 }
 export const renameKid = (kid, name) => updateDoc(kidRef(kid.id), { name });
 export const saveTasks = (kid, tasks) => updateDoc(kidRef(kid.id), { tasks });
+// Adds ready-made items that are not in the list yet and returns how many were added.
+export async function addPackTasks(kid, ageId, ids) {
+  const have = new Set(kid.tasks.map(x => x.id)), add = packTasks(ageId, kid.economy).filter(x => ids.includes(x.id) && !have.has(x.id)).map(({ sel, ...x }) => x);
+  if (add.length) await saveTasks(kid, kid.tasks.concat(add));
+  return add.length;
+}
+export async function addPackRewards(kid) {
+  const have = new Set(kid.rewards.map(x => x.id)), add = packRewards(kid).filter(x => !have.has(x.id)).map(({ tier, ...x }) => x);
+  if (add.length) await saveRewards(kid, kid.rewards.concat(add));
+  return add.length;
+}
 export const saveRewards = (kid, rewards) => updateDoc(kidRef(kid.id), { rewards });
 export const saveEconomy = (kid, economy) => updateDoc(kidRef(kid.id), { economy });
 export const savePlaylists = (kid, playlists) => updateDoc(kidRef(kid.id), { playlists });

@@ -2,16 +2,16 @@ import "./styles.css";
 import { t, tf, getLang, toggleLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { FEE_CAP_ONCE, newRun, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
-import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars } from "./domain.js";
+import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars, normLogin } from "./domain.js";
 
 const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
 const THEME_KEY = "talent-foxes-theme", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
-const ui = { delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const ui = { hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -56,6 +56,14 @@ function applyAccent(k) {
 }
 try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render()); } catch (e) {}
 
+// ---------- first-run welcome ----------
+const HELLO_PARENT_KEY = "talent-foxes-hello-parent", helloKidKey = id => "talent-foxes-hello-kid-" + id;
+function maybeHello(k) {
+  if (ui.hello || !S.ready || !S.user) return;
+  if (S.role === "kid" && k && !LS.get(helloKidKey(k.id))) ui.hello = { role: "kid", kidId: k.id };
+  else if (S.role === "parent" && S.family && !LS.get(HELLO_PARENT_KEY)) ui.hello = { role: "parent", step: 0 };
+}
+
 // ---------- render ----------
 const myKid = () => S.kids[0] || null;
 const parentKid = id => S.kids.find(x => x.id === id);
@@ -82,6 +90,9 @@ function render() {
   if (!typing) $("#view").innerHTML = html;
   $("#view").style.cssText = "display:flex;flex-direction:column;gap:16px";
   if (S.user && S.ready) askNotifyPermission();
+  maybeHello(k);
+  const hl = $("#hello"); hl.hidden = !ui.hello;
+  if (ui.hello) { hl.innerHTML = V.vHello(ui.hello, k); document.body.style.overflow = "hidden"; }
   $("#sync").textContent = S.user ? t("Данные сохраняются в вашей семье и доступны на других устройствах") : "";
   tick();
 }
@@ -207,6 +218,17 @@ const A = {
   logNo(id, el) { const k = parentKid(el.dataset.kid), l = k && k.log.find(x => x.id === id); if (l) decideLog(k, l, false).catch(fail); },
   orderOk(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "given").catch(fail); },
   orderNo(id, el) { const k = parentKid(el.dataset.kid), o = k && k.orders.find(x => x.id === id); if (o) decideOrder(k, o, "refused").catch(fail); },
+  helloNext() { if (ui.hello) { ui.hello.step++; render(); } },
+  helloDone() { if (ui.hello) { LS.set(ui.hello.role === "kid" ? helloKidKey(ui.hello.kidId) : HELLO_PARENT_KEY, "1"); ui.hello = null; document.body.style.overflow = ""; render(); } },
+  dismissAdded() { ui.justAdded = null; render(); },
+  packAge(id) { ui.packAge = id; render(); },
+  addPackTasks() {
+    const k = parentKid(ui.pk); if (!k) return;
+    const ids = [...document.querySelectorAll("[data-pack]:checked")].map(x => x.dataset.pack);
+    if (!ids.length) return toast(t("Ничего нового не добавлено"));
+    addPackTasks(k, ui.packAge, ids).then(n => toast(n ? tf("Добавлено заданий: {n}", { n }) : t("Ничего нового не добавлено"))).catch(fail);
+  },
+  addPackRewards() { const k = parentKid(ui.pk); if (k) addPackRewards(k).then(n => toast(n ? tf("Добавлено наград: {n}", { n }) : t("Ничего нового не добавлено"))).catch(fail); },
   repair(id) {
     const k = myKid(), fee = k.log.find(x => x.id === id); if (!fee) return;
     submitTask(k, { id: "repair-" + fee.id, title: "Ремонт: " + fee.repair, kind: "repair", stars: fee.stars }).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail);
@@ -250,7 +272,7 @@ const A = {
     if (sp === null) return toast(t("Нужна ссылка с open.spotify.com")); if (ym === null) return toast(t("Нужна ссылка с music.yandex.ru"));
     savePlaylists(k, { spotify: sp, yandex: ym }).then(() => toast(t("Плейлисты сохранены"))).catch(fail);
   },
-  addKid() { const n = val("nkName"), l = val("nkLogin"), p = val("nkPw"), ok = !!($("#nkConsent") || {}).checked; run(async () => { const id = await addKid(n, l, p, ok); ui.pk = id; ["nkName", "nkLogin", "nkPw"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); const cb = $("#nkConsent"); if (cb) cb.checked = false; }, "Ребёнок добавлен"); },
+  addKid() { const n = val("nkName"), l = val("nkLogin"), p = val("nkPw"), age = val("nkAge"), ok = !!($("#nkConsent") || {}).checked; run(async () => { const id = await addKid(n, l, p, ok, age); ui.pk = id; ui.justAdded = { login: normLogin(l), pw: p }; ["nkName", "nkLogin", "nkPw"].forEach(i => { const el = $("#" + i); if (el) el.value = ""; }); const cb = $("#nkConsent"); if (cb) cb.checked = false; }, "Ребёнок добавлен"); },
   resetPw(id) { const k = parentKid(id), pw = val("rp-" + id); if (k && pw) run(() => resetKidPassword(k, pw), "Пароль сохранён"); },
   delKid(id) {
     if (ui.delKid !== id) { ui.delKid = id; render(); return; }

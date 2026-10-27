@@ -2,7 +2,7 @@ import { t, tf, pl, disp, getLang } from "./i18n.js";
 import { LEGAL_URL } from "./config.js";
 import { drawPet } from "./characters.js";
 import { CHARACTERS, characterOf } from "./characters.js";
-import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
+import { COLORS, ACCENTS, ACCESSORIES, CHALLENGES, SAYS, level, mood, aliveStreak, doneToday, statusOf, zoneTask, week, today, AGES, PACKS, packTasks, packRewards, runRemaining, runActive, fmtMs, isOnceDone, dailyMinutes, planFee, noticesOf, repairOpen, FEE_CAP_ONCE, REPAIR_WINDOW_MS, HARDNESS, TIERS, typicalStars, dailyStars, tierPrice, daysToEarn, priceVerdict } from "./domain.js";
 
 import { esc } from "./util.js";
 export { esc };
@@ -240,6 +240,11 @@ export function vParent(M, ui) {
         ${sh.pot.total > 0 ? `<button class="btn small ghost" data-act="potReset">${t("Потратили, обнулить")}</button>` : ""}</div>
       <div class="hint">${t("Родители тоже могут пополнять копилку.")}</div></div>`;
 
+  const added = ui.justAdded ? `<div class="card"><h3>${t("Данные для входа ребёнка")}</h3>
+      <div class="muted">${t("Покажите их ребёнку или отправьте. Пароль виден только сейчас.")}</div>
+      <div class="stats"><div class="stat"><span>${t("Код семьи")}</span><b>${esc(fam.inviteCode)}</b></div><div class="stat"><span>${t("Логин")}</span><b>${esc(ui.justAdded.login)}</b></div><div class="stat"><span>${t("Пароль")}</span><b>${esc(ui.justAdded.pw)}</b></div></div>
+      <button class="btn small ghost" data-act="dismissAdded">${t("Скрыть")}</button></div>` : "";
+  const start = !kids.length ? `<div class="card"><h3>${t("Начало работы")}</h3><ol class="steps"><li>${t("Добавьте ребёнка и выберите его возраст")}</li><li>${t("Передайте ему код семьи, логин и пароль")}</li><li>${t("Загляните в «Экономика звёзд» и настройте цены")}</li></ol></div>` : "";
   const kidList = `<div class="card"><h3>${t("Дети")}</h3>
       ${kids.length ? "" : `<div class="muted">${t("Добавьте первого ребёнка")}</div>`}
       ${kids.map(x => `<div style="display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--line)">
@@ -253,10 +258,12 @@ export function vParent(M, ui) {
       <div class="formrow"><input class="full" type="text" id="nkName" maxlength="20" placeholder="${t("Имя")}" aria-label="${t("Имя")}">
         <input type="text" id="nkLogin" autocapitalize="none" maxlength="20" placeholder="${t("Логин латиницей")}" aria-label="${t("Логин")}">
         <input type="text" id="nkPw" autocomplete="off" maxlength="40" placeholder="${t("Пароль, от 6 символов")}" aria-label="${t("Пароль")}">
+        <select id="nkAge" class="full" aria-label="${t("Возраст ребёнка")}">${AGES.map(a => `<option value="${a.id}" ${a.id === "a8" ? "selected" : ""}>${t(a.name)}</option>`).join("")}<option value="none">${t("Без набора")}</option></select>
+        <div class="hint full">${t("Стартовые задания и награды подберутся по возрасту. Потом всё можно поменять.")}</div>
         <div class="full">${consentBox("nkConsent", t("Подтверждаю, что я родитель или законный представитель ребёнка, и даю согласие на обработку его данных по политике конфиденциальности."))}<div class="hint">${legalLinks()}</div></div>
         <button class="btn small full" data-act="addKid" ${ui.busy ? "disabled" : ""}>${t("Добавить ребёнка")}</button></div></div>`;
 
-  if (!kids.length) return `${errBox(ui.err)}${pending}${kidList}${famRules}${family}`;
+  if (!kids.length) return `${errBox(ui.err)}${start}${kidList}${pending}${famRules}${family}`;
 
   if (!kids.find(x => x.id === ui.pk)) ui.pk = kids[0].id;
   const k = kids.find(x => x.id === ui.pk), wk = week(k), max = Math.max(1, ...wk.map(d => d.move + d.clean));
@@ -286,6 +293,15 @@ export function vParent(M, ui) {
       <div class="muted">${t("Ориентир цен на награды:")}</div>
       <div class="ladder">${TIERS.map(x => `<div class="rung"><span>${t(x.name)}</span><b>${tierPrice(k, x)} ★</b><span class="muted">${tf("≈ {n} дн.", { n: x.days })}</span></div>`).join("")}</div>
       <div class="hint">${tf("Расчёт: {n} задания в день × типичные {s} ★ × 70% (ребёнок делает не всё).", { n: k.economy.tasksPerDay, s: Math.round(typicalStars(k) * 10) / 10 })}</div></div>
+    <div class="card"><h3>${t("Готовые наборы заданий")}</h3>
+      <div class="muted">${t("Звёзды подобраны по минутам и по настройкам экономики этого ребёнка. Галочками отметьте, что добавить.")}</div>
+      <div class="pills" style="justify-content:flex-start" role="group" aria-label="${t("Возраст")}">${AGES.map(a => `<button class="pill ${ui.packAge === a.id ? "on" : ""}" data-act="packAge" data-id="${a.id}">${t(a.name)}</button>`).join("")}</div>
+      <div>${packTasks(ui.packAge, k.economy).map(p => { const have = k.tasks.some(x => x.id === p.id); return `<label class="check packrow"><input type="checkbox" data-pack="${p.id}" ${p.sel && !have ? "checked" : ""} ${have ? "disabled" : ""}><span class="grow">${esc(p.icon)} ${esc(disp(p.title))}<span class="muted"> · ${tf("≈ {n} мин", { n: p.minutes })} · ${p.stars} ★${have ? " · " + t("уже добавлено") : ""}</span></span></label>`; }).join("")}</div>
+      <button class="btn small" data-act="addPackTasks">${t("Добавить выбранные задания")}</button>
+      <h3 style="margin-top:6px">${t("Готовые награды")}</h3>
+      <div class="muted">${t("Цены считаются от заработка ребёнка: мелкое примерно 2 дня, среднее неделя, крупное месяц.")}</div>
+      <div class="ladder">${packRewards(k).map(r => `<div class="rung"><span>${esc(r.icon)} ${esc(t(r.title))}</span><b>${r.cost} ★</b><span class="muted">${k.rewards.some(x => x.id === r.id) ? t("уже добавлено") : ""}</span></div>`).join("")}</div>
+      <button class="btn small" data-act="addPackRewards">${t("Добавить готовые награды")}</button></div>
     <div class="card"><h3>${t("Задания")}</h3>
       ${k.tasks.map(x => `<div class="pending"><div class="grow">${esc(x.icon || "")} ${esc(disp(x.title))}<div class="muted">${tf(x.kind === "move" ? "Движение · {n}★" : "Уборка · {n}★", { n: x.stars })}${x.minutes ? " · " + tf("≈ {n} мин", { n: x.minutes }) : ""} · ${t(x.repeat === "once" ? (isOnceDone(k, x) ? "разовое, выполнено" : "разовое") : "каждый день")}</div></div><button class="nobtn" data-act="delTask" data-id="${esc(x.id)}" aria-label="${t("Удалить")}">🗑</button></div>`).join("")}
       <div class="formrow"><input class="full" type="text" id="ntTitle" placeholder="${t("Новое задание")}" maxlength="60" aria-label="${t("Новое задание")}">
@@ -305,7 +321,7 @@ export function vParent(M, ui) {
       <input type="text" id="plSp" value="${esc(k.playlists.spotify)}" placeholder="https://open.spotify.com/playlist/…" aria-label="${t("Ссылка Spotify")}">
       <input type="text" id="plYm" value="${esc(k.playlists.yandex)}" placeholder="https://music.yandex.ru/users/…/playlists/…" aria-label="${t("Ссылка Яндекс Музыки")}">
       <button class="btn small" data-act="setPlaylists">${t("Сохранить плейлисты")}</button></div>`;
-  return `${errBox(ui.err)}${pending}${settings}${famRules}${kidList}${family}`;
+  return `${errBox(ui.err)}${added}${pending}${settings}${famRules}${kidList}${family}`;
 }
 
 // ---------- settings ----------
@@ -332,4 +348,25 @@ function dataCard(S, ui) {
     ${ui.err && ui.delStage ? `<div class="err" role="alert">${esc(ui.err)}</div>` : ""}
     ${confirm}
     ${ui.delStage ? "" : `<div class="row" style="flex-wrap:wrap">${two ? `<button class="btn small ghost" data-act="delStart" data-id="leave">${t("Выйти из семьи и удалить аккаунт")}</button>` : ""}<button class="btn small danger" data-act="delStart" data-id="family">${t("Удалить семью и все данные")}</button></div>`}</div>`;
+}
+
+// ---------- welcome screens ----------
+const HELLO_PARENT = [
+  ["Добро пожаловать в Talent Foxes", "Ребёнок выполняет задания и копит звёзды, родитель подтверждает, а звёзды превращаются в награды и в рост питомца."],
+  ["Справедливые звёзды", "Калькулятор подскажет, сколько звёзд дать за задание и сколько просить за награду. Достаточно указать, сколько минут занимает дело."],
+  ["Без наказаний", "Вместо штрафов есть правила семьи и общая копилка: сначала напоминание, потом небольшой взнос, и звёзды можно вернуть ремонтом."]
+];
+export const helloSteps = () => HELLO_PARENT.length;
+export function vHello(h, k) {
+  if (h.role === "kid") return `<div class="in" style="padding-top:24px;align-items:stretch;text-align:center">
+      <div class="stage">${drawPet(k, "pet", k.pet.name)}</div><h2>${tf("Привет, {name}!", { name: esc(k.name) })}</h2>
+      <div class="muted" style="font-size:16px">${t("Это твой питомец. Выполняй задания и нажимай «Сделано!», а родители их проверят. За звёзды можно получать награды и наряжать питомца.")}</div>
+      <button class="btn" data-act="helloDone">${t("Поехали!")}</button></div>`;
+  const [title, text] = HELLO_PARENT[h.step], last = h.step === HELLO_PARENT.length - 1;
+  return `<div class="in" style="padding-top:48px;align-items:stretch;text-align:center">
+      <div class="stage">${drawPet({ pet: { color: "fox", equipped: ["bow"], owned: [] }, log: [], lastActive: today() }, "pet", "Talent Foxes")}</div>
+      <h2>${t(title)}</h2><div class="muted" style="font-size:16px">${t(text)}</div>
+      <div class="dots">${HELLO_PARENT.map((_, i) => `<i class="${i === h.step ? "on" : ""}"></i>`).join("")}</div>
+      <button class="btn" data-act="${last ? "helloDone" : "helloNext"}">${t(last ? "Начать" : "Дальше")}</button>
+      ${last ? "" : `<button class="btn ghost" data-act="helloDone">${t("Пропустить")}</button>`}</div>`;
 }
