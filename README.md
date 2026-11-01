@@ -104,6 +104,19 @@ Messaging и убирает за собой записи входа детей:
 
 Если первая выкладка остановилась на разрешениях Eventarc, подождите 5–10 минут и запустите её снова: права появляются не сразу.
 
+## iOS
+
+В `ios/` лежит проект Capacitor (Swift Package Manager, iOS 15+). Сборка идёт на macOS-раннере GitHub.
+
+- **Без подписи** (`.github/workflows/ios.yml`): собирает `.ipa` без подписи и кладёт её в релиз
+  [ios-latest](https://github.com/Andrey6570/talentfoxes/releases/tag/ios-latest). Её можно подписать своим Apple ID (Sideloadly, AltStore).
+- **TestFlight** (`.github/workflows/ios-testflight.yml`): подписывает облачной подписью Apple и загружает сборку в TestFlight.
+  Нужны секреты GitHub `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (текст файла `.p8` целиком).
+  Приложение с идентификатором `com.andrey.talantfoxes` должно быть создано в App Store Connect.
+- **Вход через Google на iOS**: добавьте iOS-приложение в Firebase (тот же идентификатор), положите `GoogleService-Info.plist` в
+  `ios/App/App/` и подключите его к проекту; в `Info.plist` нужна схема URL со значением `REVERSED_CLIENT_ID`.
+- **Push на iOS** пока не сделан: нужен ключ APNs в Firebase и подключение Firebase Messaging, чтобы приложение отдавало FCM-токен.
+
 ## Правила семьи и копилка
 
 Вместо штрафов есть «взнос в копилку». Правило с заранее известной ценой (1–3 ★) родитель применяет к ребёнку.
