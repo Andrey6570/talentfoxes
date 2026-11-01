@@ -43,19 +43,14 @@ jobs:
           mkdir -p "$HOME/private_keys"
           printf '%s\n' "$KEY" > "$HOME/private_keys/AuthKey_${KEY_ID}.p8"
 
-      - name: Archive
+      # The archive is built unsigned: signing for TestFlight happens at export with a cloud-managed distribution certificate,
+      # so no registered device or development profile is needed.
+      - name: Archive (unsigned)
         if: steps.secrets.outputs.ok == 'true'
-        env:
-          TEAM: ${{ secrets.APPLE_TEAM_ID }}
-          KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/App.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$HOME/private_keys/AuthKey_${KEY_ID}.p8" \
-            -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" \
-            DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} archive
 
       - name: Export and upload to TestFlight
