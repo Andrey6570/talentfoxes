@@ -1,0 +1,53 @@
+name: iOS build (unsigned)
+
+# Builds the iOS app on a macOS runner and packs it as an UNSIGNED .ipa.
+# An unsigned .ipa cannot be installed by itself: re-sign it with your Apple ID (Sideloadly, AltStore) or sign it in Xcode.
+# Run it by hand (Actions -> "iOS build (unsigned)" -> Run workflow). It also runs when the iOS project changes.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app and sync into the iOS project
+        run: |
+          npx vite build
+          npx cap sync ios
+
+      - name: Build for a device without signing
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} build
+
+      - name: Pack the unsigned .ipa
+        run: |
+          APP=$(find build/Build/Products -maxdepth 2 -name "App.app" | head -1)
+          test -n "$APP"
+          mkdir -p Payload && cp -R "$APP" Payload/App.app
+          zip -qry talent-foxes-unsigned.ipa Payload
+          ls -la talent-foxes-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: talent-foxes-ios-unsigned
+          path: talent-foxes-unsigned.ipa
+          if-no-files-found: error
