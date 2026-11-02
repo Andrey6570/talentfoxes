@@ -1,7 +1,8 @@
 // Push notifications through Firebase Cloud Messaging (Android app only; the browser version has none).
 import { Capacitor } from "@capacitor/core";
 
-export const pushSupported = () => Capacitor.isNativePlatform();
+// Server push is wired for Android only; iOS needs an APNs key and the Firebase Messaging SDK first.
+export const pushSupported = () => Capacitor.getPlatform() === "android";
 async function plugin() { return (await import("@capacitor/push-notifications")).PushNotifications; }
 
 // Asks for permission and gets this device's token; onToken is called with it (again whenever it changes).

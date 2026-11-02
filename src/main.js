@@ -5,7 +5,7 @@ import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily
   saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, saveScale, saveDevice, setDeviceLang, removeDevice, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { FEE_CAP_ONCE, newRun, rescaleKid, reminderPlan, parseDay, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
-import { startPush, stopPush, ensurePermission } from "./push.js";
+import { startPush, stopPush, ensurePermission, pushSupported } from "./push.js";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars, normLogin } from "./domain.js";
 
 const $ = s => document.querySelector(s);
@@ -90,9 +90,9 @@ function syncReminders() {
 // so the same event is not shown twice (the app in front still shows its own banner).
 let pushActive = false;
 const pushState = { key: "", id: "" };
-ui.push = Capacitor.isNativePlatform() ? { state: "wait", err: "" } : null;
+ui.push = pushSupported() ? { state: "wait", err: "" } : null;
 async function syncPush() {
-  if (!Capacitor.isNativePlatform() || !ui.notify || !S.user || !S.ready || !S.family || !S.family.id) return;
+  if (!pushSupported() || !ui.notify || !S.user || !S.ready || !S.family || !S.family.id) return;
   const kid = S.role === "kid" ? myKid() : null; if (S.role === "kid" && !kid) return;
   const key = S.user.uid + ":" + (kid ? kid.id : "");
   if (pushState.key === key) return; pushState.key = key;
