@@ -5,7 +5,7 @@ import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily
   saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, saveScale, saveDevice, setDeviceLang, removeDevice, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { FEE_CAP_ONCE, newRun, rescaleKid, reminderPlan, parseDay, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
-import { startPush, stopPush } from "./push.js";
+import { startPush, stopPush, ensurePermission } from "./push.js";
 import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl, normCode, uid, taskStars, normLogin } from "./domain.js";
 
 const $ = s => document.querySelector(s);
@@ -197,7 +197,8 @@ setOnEvent(ev => {
 // ask for permission once, right after the first sign-in on this device
 async function askNotifyPermission() {
   if (LS.get(ASKED_KEY) || !S.user) return; LS.set(ASKED_KEY, "1");
-  const L = await localNotifications(); if (L) { try { await L.requestPermissions(); } catch (e) {} }
+  if (!Capacitor.isNativePlatform()) return;
+  try { await ensurePermission(); } catch (e) {} // the same system permission covers local reminders and push
 }
 
 function tick() {
