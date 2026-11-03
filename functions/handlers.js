@@ -10,7 +10,8 @@ async function devices(db, fid, field, value) {
 }
 
 // One message per language; devices whose token is no longer valid are removed.
-async function send({ messaging }, list, build) {
+async function send({ messaging }, list, build, what = "push") {
+  console.log(`${what}: ${list.length} device(s) found`);
   const byLang = {};
   list.forEach(d => { (byLang[d.lang] = byLang[d.lang] || []).push(d); });
   for (const [lang, group] of Object.entries(byLang)) {
@@ -19,6 +20,8 @@ async function send({ messaging }, list, build) {
       tokens: group.map(d => d.token), notification: { title, body },
       android: { priority: "high", notification: { channelId: "default" } }
     });
+    const failed = res.responses.filter(r => !r.success);
+    console.log(`${what}: lang ${lang}: ${res.successCount} sent, ${res.failureCount} failed` + (failed.length ? " (" + failed.map(r => r.error && r.error.code).join(", ") + ")" : ""));
     await Promise.all(res.responses.map((r, i) => (!r.success && r.error && DEAD.includes(r.error.code)) ? group[i].ref.delete() : null));
   }
   return list.length;
@@ -28,19 +31,19 @@ export async function onLogCreated(deps, { fid, kidId, data }) {
   if (!data || data.type !== "task" || data.status !== "pending") return 0;
   const kid = await deps.db.doc(`families/${fid}/kids/${kidId}`).get();
   const name = (kid.exists && kid.data().name) || "";
-  return send(deps, await devices(deps.db, fid, "role", "parent"), lang => compose("logPending", lang, { kid: name, title: data.title, stars: data.stars }));
+  return send(deps, await devices(deps.db, fid, "role", "parent"), lang => compose("logPending", lang, { kid: name, title: data.title, stars: data.stars }), "logPending");
 }
 
 export async function onLogUpdated(deps, { fid, kidId, before, after }) {
   if (!before || !after || after.type !== "task" || before.status !== "pending" || after.status !== "done") return 0;
-  return send(deps, await devices(deps.db, fid, "kidId", kidId), lang => compose("approved", lang, { title: after.title, stars: after.stars }));
+  return send(deps, await devices(deps.db, fid, "kidId", kidId), lang => compose("approved", lang, { title: after.title, stars: after.stars }), "approved");
 }
 
 export async function onOrderCreated(deps, { fid, kidId, data }) {
   if (!data || data.kind !== "reward" || data.status !== "pending") return 0;
   const kid = await deps.db.doc(`families/${fid}/kids/${kidId}`).get();
   const name = (kid.exists && kid.data().name) || "";
-  return send(deps, await devices(deps.db, fid, "role", "parent"), lang => compose("orderPending", lang, { kid: name, title: data.title, cost: data.cost }));
+  return send(deps, await devices(deps.db, fid, "role", "parent"), lang => compose("orderPending", lang, { kid: name, title: data.title, cost: data.cost }), "orderPending");
 }
 
 // New tasks reach the child; a changed sign-in account (password reset) removes the old one.
