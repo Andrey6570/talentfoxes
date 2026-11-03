@@ -1,12 +1,18 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getAuth, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, persistentSingleTabManager } from "firebase/firestore";
 import { Capacitor } from "@capacitor/core";
 import { firebaseConfig } from "./config.js";
 
 export const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+const native = Capacitor.isNativePlatform();
+// In the iOS web view the default Auth start-up can hang, so the phone apps name their storage explicitly;
+// Firestore falls back to long polling there when streaming does not work.
+export const auth = native ? initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }) : getAuth(app);
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: native ? persistentSingleTabManager({}) : persistentMultipleTabManager() }),
+  experimentalAutoDetectLongPolling: true
+});
 
 export async function googleSignIn() {
   if (Capacitor.isNativePlatform()) {

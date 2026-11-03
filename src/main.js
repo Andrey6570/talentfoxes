@@ -85,6 +85,8 @@ function syncReminders() {
   }, 1500);
 }
 
+setTimeout(() => { if (!S.ready) { ui.slow = true; render(); } }, 10000);
+
 // ---------- push notifications ----------
 // This device registers for push once the person is known. While push works, the local background notices are switched off
 // so the same event is not shown twice (the app in front still shows its own banner).
@@ -136,7 +138,7 @@ function render() {
 
   const typing = document.activeElement && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && $("#view").contains(document.activeElement);
   let html;
-  if (!S.ready && !demoState) html = `<div class="muted" style="text-align:center;padding:40px 0">${t("Загрузка…")}</div>`;
+  if (!S.ready && !demoState) html = `<div class="muted" style="text-align:center;padding:40px 0">${t("Загрузка…")}${ui.slow ? `<br><br>${t("Долго грузится. Проверьте интернет и откройте приложение заново.")}` : ""}</div>`;
   else if (!S.user) html = V.vWelcome(ui);
   else if (role === "parent" && !S.family) html = V.vFamilySetup(S, ui);
   else if (role === "parent") html = V.vParent(S, ui);
