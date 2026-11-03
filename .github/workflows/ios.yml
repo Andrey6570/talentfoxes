@@ -38,6 +38,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} build
 
+      - name: Show what ended up inside the app bundle
+        run: |
+          APP=$(find build/Build/Products -maxdepth 2 -name "App.app" | head -1)
+          ls -la "$APP" | head -40
+          echo "--- capacitor.config.json"; cat "$APP/capacitor.config.json" || true
+          echo "--- GoogleService-Info.plist"; plutil -p "$APP/GoogleService-Info.plist" | head -20 || true
+          echo "--- Info.plist URL types"; plutil -extract CFBundleURLTypes xml1 -o - "$APP/Info.plist" || true
+
       - name: Pack the unsigned .ipa
         run: |
           APP=$(find build/Build/Products -maxdepth 2 -name "App.app" | head -1)
