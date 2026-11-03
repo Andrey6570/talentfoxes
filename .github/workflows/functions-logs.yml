@@ -1,0 +1,36 @@
+name: Functions logs (diagnostics)
+
+# Prints the latest Cloud Functions log lines and the function service account's roles, to debug push delivery.
+# Reads only; uses the same FIREBASE_SERVICE_ACCOUNT secret as the deploy.
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Functions and their service account
+        run: |
+          gcloud functions list --project talent-foxes --format="table(name,state,environment,serviceConfig.serviceAccountEmail)" || true
+
+      - name: Roles of the service accounts that run the functions
+        run: |
+          NUM=$(gcloud projects describe talent-foxes --format="value(projectNumber)")
+          echo "project number: $NUM"
+          gcloud projects get-iam-policy talent-foxes --flatten="bindings[].members" \
+            --filter="bindings.members:${NUM}-compute@developer.gserviceaccount.com OR bindings.members:talent-foxes@appspot.gserviceaccount.com" \
+            --format="table(bindings.role,bindings.members)" || true
+
+      - name: Latest function log lines (warnings and errors first)
+        run: |
+          echo "=== warnings and errors, last 3 days"
+          gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING' --project talent-foxes --freshness=3d --limit=40 \
+            --format="value(timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)" || true
+          echo "=== all lines, last 1 day"
+          gcloud logging read 'resource.type="cloud_run_revision"' --project talent-foxes --freshness=1d --limit=60 \
+            --format="value(timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)" || true
