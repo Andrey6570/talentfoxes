@@ -46,6 +46,13 @@ service cloud.firestore {
           && resource.data.parentUids.hasAll(request.resource.data.parentUids)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUids']))
         ||
+        // a parent takes the other parent out: exactly one id goes, their own stays
+        (request.auth.uid in resource.data.parentUids
+          && request.auth.uid in request.resource.data.parentUids
+          && resource.data.parentUids.hasAll(request.resource.data.parentUids)
+          && request.resource.data.parentUids.size() == resource.data.parentUids.size() - 1
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['parentUids']))
+        ||
         (request.auth.uid in request.resource.data.parentUids
           && request.resource.data.parentUids.hasAll(resource.data.parentUids)
           && request.resource.data.parentUids.size() <= 2
@@ -55,6 +62,13 @@ service cloud.firestore {
 
       // family rules and the family pot: parents write, the family's children read
       allow delete: if isGoogle() && request.auth.uid in resource.data.parentUids;
+
+      // a card per parent (address and name), so parents see who is in the family
+      match /members/{uid} {
+        allow read: if isParent(fid);
+        allow create, update: if isParent(fid) && request.auth.uid == uid;
+        allow delete: if isParent(fid);
+      }
 
       match /shared/{doc} {
         allow read: if isParent(fid) || isFamilyKid(fid);

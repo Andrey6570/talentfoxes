@@ -7,7 +7,7 @@ import { createDetector } from "./changes.js";
 import { derive, newKidDoc, newInviteCode, normLogin, normCode, kidEmail, streakAfter, today, uid, planFee, defaultRules, starterKit, packTasks, packRewards } from "./domain.js";
 
 // role: null (signed out) | "parent" | "kid"
-export const M = { ready: false, user: null, role: null, family: null, kids: [], events: [], error: "", shared: { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } } };
+export const M = { ready: false, user: null, role: null, family: null, kids: [], events: [], members: [], error: "", shared: { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } } };
 
 let notify = () => {};
 let unsubs = [];
@@ -21,7 +21,7 @@ export const setOnEvent = f => { onEvent = f; };
 const detect = createDetector(() => M.role, ev => onEvent(ev));
 
 function stopAll() {
-  M.events = [];
+  M.events = []; M.members = [];
   detect.reset();
   M.shared = { rules: [], rulesSaved: false, pot: { total: 0, goalTitle: "", goalCost: 0 } };
   unsubs.forEach(f => f()); unsubs = [];
@@ -80,9 +80,17 @@ async function loadParent(user) {
     if (!fid) { M.family = null; notify(); return; }
     const first = !M.family || M.family.id !== fid;
     M.family = Object.assign({ id: fid }, d.data());
-    if (first) { watchKids(fid, collection(db, "families", fid, "kids")); watchShared(fid); watchEvents(fid); }
+    if (first) { watchKids(fid, collection(db, "families", fid, "kids")); watchShared(fid); watchEvents(fid); watchMembers(fid, user); }
     notify();
   }, onErr));
+}
+
+// Each parent keeps a small card (address and name) so the other parent can see who is in the family.
+function watchMembers(fid, user) {
+  setDoc(doc(db, "families", fid, "members", user.uid), { email: user.email || "", name: user.displayName || "", at: Date.now() }, { merge: true }).catch(() => {});
+  unsubs.push(onSnapshot(collection(db, "families", fid, "members"), snap => {
+    M.members = snap.docs.map(d => Object.assign({ uid: d.id }, d.data())); notify();
+  }, () => {}));
 }
 
 async function loadKid(user) {
@@ -185,7 +193,7 @@ export async function deleteFamilyAndAccount() {
     await deleteSubcollections(["families", fid, "kids", k.id], ["log", "orders"]);
     const b = writeBatch(db); b.delete(doc(db, "families", fid, "kids", k.id)); b.delete(doc(db, "logins", `${code}__${k.login}`)); await b.commit();
   }
-  await deleteSubcollections(["families", fid], ["shared", "events", "devices"]);
+  await deleteSubcollections(["families", fid], ["shared", "events", "devices", "members"]);
   await deleteDoc(doc(db, "invites", code));
   await deleteDoc(doc(db, "families", fid));
   await deleteCurrentUser();
@@ -195,9 +203,19 @@ export async function deleteFamilyAndAccount() {
 export async function leaveFamilyAndDeleteAccount() {
   const fid = M.family.id, me = M.user.uid, rest = (M.family.parentUids || []).filter(u => u !== me);
   await googleSignIn();
+  await deleteDoc(doc(db, "families", fid, "members", me)).catch(() => {});
   await updateDoc(doc(db, "families", fid), { parentUids: rest });
   await deleteCurrentUser();
   await appSignOut().catch(() => {});
+}
+// One parent takes the other out of the family: their access ends, their Google account itself is not touched.
+export async function removeParent(other) {
+  const fid = M.family.id;
+  if (other === M.user.uid) throw new Error("not-self");
+  await updateDoc(doc(db, "families", fid), { parentUids: (M.family.parentUids || []).filter(u => u !== other) });
+  await deleteDoc(doc(db, "families", fid, "members", other)).catch(() => {});
+  const ds = await getDocs(query(collection(db, "families", fid, "devices"), where("uid", "==", other))).catch(() => null);
+  if (ds) await Promise.all(ds.docs.map(d => deleteDoc(d.ref).catch(() => {})));
 }
 export const renameKid = (kid, name) => updateDoc(kidRef(kid.id), { name });
 export const saveTasks = (kid, tasks) => updateDoc(kidRef(kid.id), { tasks });

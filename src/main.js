@@ -2,7 +2,7 @@ import "./styles.css";
 import { t, tf, getLang, setLang, disp } from "./i18n.js";
 import * as V from "./views.js";
 import { M, start, parentSignIn, signOutAll, kidSignIn, createFamily, joinFamily, renameFamily, addKid, resetKidPassword, deleteKid, renameKid,
-  saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, saveScale, saveDevice, setDeviceLang, removeDevice, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
+  saveTasks, saveRewards, savePlaylists, saveEconomy, saveEvent, saveScale, saveDevice, setDeviceLang, removeDevice, deleteEvent, addPackTasks, addPackRewards, deleteFamilyAndAccount, leaveFamilyAndDeleteAccount, removeParent, deleteLog, setOnEvent, saveRules, seedRules, saveGoal, adjustPot, resetPot, applyRule, undoRule, decideLog, decideOrder, giveBonus, submitTask, orderReward, buyAccessory, savePet, saveAccent } from "./store.js";
 import { FEE_CAP_ONCE, newRun, rescaleKid, reminderPlan, parseDay, runRemaining, pauseRun, resumeRun, finishRun, fmtMs, speedPayload } from "./domain.js";
 import { Capacitor } from "@capacitor/core";
 import { startPush, stopPush, ensurePermission, pushSupported } from "./push.js";
@@ -249,6 +249,9 @@ const A = {
     run(async () => { await kidSignIn(ui.kCode, ui.kLogin, pw); LS.set("talent-foxes-code", normCode(ui.kCode)); LS.set("talent-foxes-login", ui.kLogin); ui.tab = "home"; });
   },
   createFamily() { const n = val("famName").trim(); if (!n) return fail({ code: "need-name" }); if (!($("#famConsent") || {}).checked) return fail({ code: "need-consent" }); run(() => createFamily(n.slice(0, 30))); },
+  rmParentAsk(id) { ui.rmParent = id; render(); },
+  rmParentNo() { ui.rmParent = null; render(); },
+  rmParentYes(id) { ui.rmParent = null; run(() => removeParent(id), "Родитель убран из семьи"); },
   joinFamily() { const c = normCode(val("joinCode")); if (!c) return fail({ code: "need-code" }); if (!($("#famConsent") || {}).checked) return fail({ code: "need-consent" }); run(() => joinFamily(c)); },
   renameFamily() { const n = val("famNameEdit").trim(); if (n) run(() => renameFamily(n.slice(0, 30)), "Сохранено"); },
 

@@ -321,4 +321,11 @@ export const EN_MORE = {
   "Введите код семьи": "Enter the family code",
   "Цвет оформления": "Accent colour",
   "Цвет запоминается на этом телефоне. У ребёнка свой цвет, он выбирает его сам.": "The colour is saved on this phone. Each child picks their own colour.",
+  "Родители семьи": "Parents in the family",
+  "вы": "you",
+  "Убрать": "Remove",
+  "Да, убрать": "Yes, remove",
+  "Родитель убран из семьи": "The parent was removed from the family",
+  "Адрес появится, когда этот родитель откроет новую версию приложения": "The address appears once this parent opens the new version of the app",
+  "Этот родитель потеряет доступ к семье. Его аккаунт Google не удаляется, а освободившееся место можно отдать по коду семьи.": "This parent will lose access to the family. Their Google account is not deleted, and the free place can be given to someone else with the family code.",
 };

@@ -262,6 +262,19 @@ function rewardNote(k, cost) {
   const flag = v === "cheap" ? ` · <b class="flag">${t("дешевле одного дня")}</b>` : v === "dear" ? ` · <b class="flag">${t("очень дорого")}</b>` : "";
   return `${cost}★ · ${days}${flag}`;
 }
+function parentsList(M, ui) {
+  const me = M.user && M.user.uid, members = M.members || [];
+  const rows = (M.family.parentUids || []).map(u => {
+    const m = members.find(x => x.uid === u), who = m && m.email ? esc(m.email) : `<span class="muted">${t("Адрес появится, когда этот родитель откроет новую версию приложения")}</span>`;
+    const act = u === me ? `<span class="chip">${t("вы")}</span>`
+      : ui.rmParent === u ? `<button class="btn small" data-act="rmParentYes" data-id="${u}">${t("Да, убрать")}</button><button class="btn small ghost" data-act="rmParentNo">${t("Отмена")}</button>`
+      : `<button class="btn small ghost" data-act="rmParentAsk" data-id="${u}">${t("Убрать")}</button>`;
+    return `<div class="pending" style="flex-wrap:wrap"><div class="grow" style="min-width:60%">${who}</div><div class="row" style="gap:8px;margin-left:auto">${act}</div></div>`;
+  }).join("");
+  return `<div class="muted">${t("Родители семьи")}</div>${rows}
+    ${ui.rmParent ? `<div class="hint">${t("Этот родитель потеряет доступ к семье. Его аккаунт Google не удаляется, а освободившееся место можно отдать по коду семьи.")}</div>` : ""}`;
+}
+
 export function vParent(M, ui) {
   const kids = M.kids, fam = M.family;
   const pendLogs = [], pendOrders = [];
@@ -279,7 +292,8 @@ export function vParent(M, ui) {
       <div class="pwrow"><input type="text" id="famNameEdit" maxlength="30" value="${esc(fam.name)}" aria-label="${t("Название семьи")}"><button class="btn small" data-act="renameFamily">${t("Сохранить")}</button></div>
       <div class="muted">${t("Код семьи")}</div><div class="code" id="famCode">${esc(fam.inviteCode)}</div>
       <div class="hint">${t("Этот код нужен ребёнку для входа и второму родителю для присоединения.")}</div>
-      <div class="hint">${tf("Родителей в семье: {n} из 2", { n: (fam.parentUids || []).length })}</div></div>`;
+      <div class="hint">${tf("Родителей в семье: {n} из 2", { n: (fam.parentUids || []).length })}</div>
+      ${parentsList(M, ui)}</div>`;
 
   const sh = M.shared;
   const famRules = `<div class="card"><h3>${t("Правила семьи")}</h3>
