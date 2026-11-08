@@ -25,6 +25,7 @@ function errText(e) {
   if (/nologin|no-family|bad-account/.test(c)) return t("Такого ребёнка не нашли. Проверьте код семьи и логин.");
   if (/bad-code/.test(c)) return t("Такого кода нет");
   if (/need-consent/.test(c)) return t("Нужно подтвердить согласие");
+  if (/need-code/.test(c)) return t("Введите код семьи");
   if (/requires-recent-login/.test(c)) return t("Войдите заново и повторите");
   if (/weak-password/.test(c)) return t("Пароль не короче 6 символов");
   if (/login-taken|email-already/.test(c)) return t("Такой логин уже занят");
@@ -122,6 +123,7 @@ function maybeHello(k) {
 }
 
 // ---------- render ----------
+const KEEP_FIELDS = ["famName", "joinCode", "famConsent"];
 const myKid = () => S.kids[0] || null;
 const parentKid = id => S.kids.find(x => x.id === id);
 function render() {
@@ -144,7 +146,12 @@ function render() {
   else if (role === "parent") html = V.vParent(S, ui);
   else if (!k) html = `<div class="card result"><h3>${t(S.error ? "Не удалось открыть профиль" : "Загрузка…")}</h3><div class="muted">${S.error ? esc(S.error) : ""}</div></div>`;
   else html = ui.tab === "home" ? V.vHome(k, S.shared) : ui.tab === "tasks" ? V.vTasks(k, ui) : ui.tab === "plan" ? V.vCalendar(k, S) : ui.tab === "wheel" ? V.vWheel(k, ui) : V.vShop(k);
-  if (!typing) $("#view").innerHTML = html;
+  if (!typing) {
+    // fields of the family setup screen survive a re-render (data arriving from the database used to wipe the typed code)
+    const keep = KEEP_FIELDS.map(id => document.getElementById(id)).filter(Boolean).map(el => [el.id, el.type === "checkbox" ? el.checked : el.value]);
+    $("#view").innerHTML = html;
+    keep.forEach(([id, v]) => { const el = document.getElementById(id); if (!el) return; if (el.type === "checkbox") el.checked = el.checked || v; else if (!el.value) el.value = v; });
+  }
   $("#view").style.cssText = "display:flex;flex-direction:column;gap:16px";
   if (S.user && S.ready) askNotifyPermission();
   maybeHello(k);
@@ -242,7 +249,7 @@ const A = {
     run(async () => { await kidSignIn(ui.kCode, ui.kLogin, pw); LS.set("talent-foxes-code", normCode(ui.kCode)); LS.set("talent-foxes-login", ui.kLogin); ui.tab = "home"; });
   },
   createFamily() { const n = val("famName").trim(); if (!n) return fail({ code: "need-name" }); if (!($("#famConsent") || {}).checked) return fail({ code: "need-consent" }); run(() => createFamily(n.slice(0, 30))); },
-  joinFamily() { const c = val("joinCode"); if (!($("#famConsent") || {}).checked) return fail({ code: "need-consent" }); run(() => joinFamily(c)); },
+  joinFamily() { const c = normCode(val("joinCode")); if (!c) return fail({ code: "need-code" }); if (!($("#famConsent") || {}).checked) return fail({ code: "need-consent" }); run(() => joinFamily(c)); },
   renameFamily() { const n = val("famNameEdit").trim(); if (n) run(() => renameFamily(n.slice(0, 30)), "Сохранено"); },
 
   // child

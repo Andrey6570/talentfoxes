@@ -318,4 +318,5 @@ export const EN_MORE = {
   "Включить уведомления": "Turn on notifications",
   "Если окно разрешения не появилось, откройте настройки телефона: Приложения, Talent Foxes, Уведомления, и включите их. Потом нажмите кнопку ещё раз.": "If no permission window appeared, open the phone settings: Apps, Talent Foxes, Notifications, and turn them on. Then press the button again.",
   "Долго грузится. Проверьте интернет и откройте приложение заново.": "Taking a long time. Check your internet connection and reopen the app.",
+  "Введите код семьи": "Enter the family code",
 };

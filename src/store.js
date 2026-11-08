@@ -129,8 +129,10 @@ export async function createFamily(name) {
   await b.commit();
 }
 export async function joinFamily(codeRaw) {
-  const code = normCode(codeRaw), inv = await getDoc(doc(db, "invites", code));
-  if (!inv.exists()) throw new Error("bad-code");
+  const code = normCode(codeRaw);
+  if (!code) throw new Error("bad-code");
+  const inv = await getDoc(doc(db, "invites", code));
+  if (!inv.exists() || !inv.data().fid) throw new Error("bad-code");
   await updateDoc(doc(db, "families", inv.data().fid), { parentUids: arrayUnion(M.user.uid), joinProof: code });
 }
 export const renameFamily = name => updateDoc(famRef(), { name });
