@@ -397,7 +397,10 @@ export function vSettings(S, ui) {
   const pills = (act, cur, items) => `<div class="pills" style="justify-content:flex-start" role="group">${items.map(([id, name]) => `<button class="pill ${cur === id ? "on" : ""}" data-act="${act}" data-id="${id}">${name}</button>`).join("")}</div>`;
   return `<div class="in"><div class="row"><h2 class="grow">${t("Настройки")}</h2><button class="btn small ghost" data-act="closeSettings">${t("Закрыть")}</button></div>
     <div class="card"><h3>${t("Язык")}</h3>${pills("setLang", getLang(), LANGS)}</div>
-    <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}</div>
+    <div class="card"><h3>${t("Тема")}</h3>${pills("setTheme", ui.theme, [["system", t("Как в системе")], ["light", t("Светлая")], ["dark", t("Тёмная")]])}
+      ${S.role === "parent" ? `<div class="muted">${t("Цвет оформления")}</div>
+      <div class="accents" role="group" aria-label="${t("Цвет оформления")}" style="justify-content:flex-start">${ACCENTS.map(a => `<button class="dot ${a.id === ui.parentAccent ? "on" : ""}" style="background:${a.l}" data-act="parentAccent" data-id="${a.id}" aria-label="${t(a.name)}"></button>`).join("")}</div>
+      <div class="hint">${t("Цвет запоминается на этом телефоне. У ребёнка свой цвет, он выбирает его сам.")}</div>` : ""}</div>
     <div class="card"><h3>${t("Справка")}</h3><button class="btn ghost" data-act="openHelp">${t("Инструкция и частые вопросы")}</button>${S.user ? `<button class="btn small ghost" data-act="helloAgain">${t("Показать приветствие снова")}</button>` : ""}</div>
     ${S.user ? `<div class="card"><h3>${t("Уведомления")}</h3>${pills("setNotify", ui.notify ? "on" : "off", [["on", t("Включены")], ["off", t("Выключены")]])}
       <div class="hint">${t("Уведомления приходят, пока приложение открыто или недавно было открыто. Если оно закрыто, новое будет видно, когда его откроют.")}</div>${pushStatus(ui)}</div>` : ""}

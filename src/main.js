@@ -11,8 +11,8 @@ import { ACCENTS, ACCESSORIES, CHALLENGES, SAYS, mood, today, zoneTask, checkUrl
 const $ = s => document.querySelector(s);
 const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
 
-const THEME_KEY = "talent-foxes-theme", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
-const ui = { settingsPage: null, helpTab: "guide", helpWho: null, helpOpen: new Set(), helpTouched: false, econPending: null, sched: null, ntDays: [], hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
+const THEME_KEY = "talent-foxes-theme", PARENT_ACCENT_KEY = "talent-foxes-parent-accent", NOTIFY_KEY = "talent-foxes-notify", ASKED_KEY = "talent-foxes-notify-asked";
+const ui = { settingsPage: null, helpTab: "guide", helpWho: null, helpOpen: new Set(), helpTouched: false, econPending: null, sched: null, ntDays: [], hello: null, justAdded: null, packAge: "a8", delStage: null, notify: LS.get(NOTIFY_KEY) !== "off", settings: false, theme: LS.get(THEME_KEY) || "system", parentAccent: LS.get(PARENT_ACCENT_KEY) || "violet", bonusN: 3, welcome: "choose", err: "", busy: false, tab: "home", kCode: LS.get("talent-foxes-code") || "", kLogin: LS.get("talent-foxes-login") || "",
   ruleId: null, wheelRot: 0, spinning: false, pick: null, mins: 10, run: null, pk: null, delKid: null };
 const demoState = window.__demoState; // used by the layout smoke test only
 const S = demoState || M;
@@ -52,7 +52,7 @@ applyTheme();
 
 // ---------- accent ----------
 function applyAccent(k) {
-  const a = ACCENTS.find(x => x.id === (k ? k.accent : "violet")) || ACCENTS[0], root = document.documentElement, th = root.getAttribute("data-theme");
+  const a = ACCENTS.find(x => x.id === (k ? k.accent : ui.parentAccent)) || ACCENTS[0], root = document.documentElement, th = root.getAttribute("data-theme");
   const dark = th === "dark" || (th !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
   root.style.setProperty("--accent", dark ? a.d : a.l); root.style.setProperty("--accent-ink", dark ? "#14122B" : "#FFFFFF");
 }
@@ -257,6 +257,8 @@ const A = {
   character(id) { const k = myKid(); savePet(k, Object.assign({}, k.pet, { character: id })).catch(fail); },
   color(id) { const k = myKid(); savePet(k, Object.assign({}, k.pet, { color: id })).catch(fail); },
   accent(id) { saveAccent(myKid(), id).catch(fail); },
+  // the parents' colour is a choice of this device, like the light or dark theme
+  parentAccent(id) { ui.parentAccent = id; LS.set(PARENT_ACCENT_KEY, id); render(); },
   submit(id) { const k = myKid(), tk = k.tasks.concat([zoneTask()]).find(x => x.id === id); if (tk) submitTask(k, tk).then(() => toast(t("Отправлено родителям на проверку"))).catch(fail); },
   mins(id) { ui.mins = +id; render(); },
   speedStart() { ui.run = newRun(ui.mins); ui.confirmCancel = false; wake(true); scheduleTimerEnd(ui.run.planned); render(); },
