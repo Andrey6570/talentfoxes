@@ -47,3 +47,22 @@ jobs:
           for r in rows:
               f=r["document"]["fields"]; g=lambda k:list(f.get(k,{}).values())[0] if k in f else "-"
               print(r["document"]["name"].split("/documents/")[1].rsplit("/",1)[0], "| role", g("role"), "| platform", g("platform"), "| lang", g("lang"), "| updatedAt", g("updatedAt"), "| has token", "token" in f)'
+
+      - name: Families overview (names, number of parents, invite link)
+        run: |
+          TOKEN=$(gcloud auth print-access-token)
+          BASE="https://firestore.googleapis.com/v1/projects/talent-foxes/databases/(default)/documents"
+          curl -s -H "Authorization: Bearer $TOKEN" "$BASE/families?pageSize=50" > fam.json
+          curl -s -H "Authorization: Bearer $TOKEN" "$BASE/invites?pageSize=50" > inv.json
+          python3 - <<'PY'
+          import json
+          fams=json.load(open("fam.json")).get("documents",[]); invs=json.load(open("inv.json")).get("documents",[])
+          inv={d["name"].rsplit("/",1)[1]: d["fields"].get("fid",{}).get("stringValue") for d in invs}
+          print(len(fams),"family(ies),",len(invs),"invite(s)")
+          for d in fams:
+              f=d["fields"]; fid=d["name"].rsplit("/",1)[1]
+              uids=[v.get("stringValue") for v in f.get("parentUids",{}).get("arrayValue",{}).get("values",[])]
+              code=f.get("inviteCode",{}).get("stringValue","")
+              print(fid[:6]+"…", "| name", f.get("name",{}).get("stringValue"), "| parents", len(uids), "| uids", [u[:5]+"…" for u in uids],
+                    "| invite doc points here", inv.get(code)==fid, "| has joinProof", "joinProof" in f)
+          PY
