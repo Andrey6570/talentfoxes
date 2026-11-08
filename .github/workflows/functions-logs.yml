@@ -34,3 +34,16 @@ jobs:
           echo "=== all lines, last 1 day"
           gcloud logging read 'resource.type="cloud_run_revision"' --project talent-foxes --freshness=1d --limit=60 \
             --format="value(timestamp,resource.labels.service_name,severity,textPayload,jsonPayload.message)" || true
+
+      - name: Registered push devices (no tokens shown)
+        run: |
+          TOKEN=$(gcloud auth print-access-token)
+          curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            "https://firestore.googleapis.com/v1/projects/talent-foxes/databases/(default)/documents:runQuery" \
+            -d '{"structuredQuery":{"from":[{"collectionId":"devices","allDescendants":true}],"limit":50}}' \
+            | python3 -c 'import json,sys
+          rows=[r for r in json.load(sys.stdin) if "document" in r]
+          print(len(rows), "device document(s)")
+          for r in rows:
+              f=r["document"]["fields"]; g=lambda k:list(f.get(k,{}).values())[0] if k in f else "-"
+              print(r["document"]["name"].split("/documents/")[1].rsplit("/",1)[0], "| role", g("role"), "| platform", g("platform"), "| lang", g("lang"), "| updatedAt", g("updatedAt"), "| has token", "token" in f)'
