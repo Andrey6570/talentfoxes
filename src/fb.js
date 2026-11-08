@@ -17,7 +17,15 @@ export const db = initializeFirestore(app, {
 export async function googleSignIn() {
   if (Capacitor.isNativePlatform()) {
     const { FirebaseAuthentication } = await import("@capacitor-firebase/authentication");
-    const res = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true });
+    let res;
+    try { res = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true }); }
+    catch (e) {
+      // Android's Credential Manager can fail on some installs (e.g. "[16] Account reauth failed");
+      // the classic Google sign-in window is tried once before giving up, unless the person cancelled.
+      const msg = String((e && (e.message || e.code)) || "");
+      if (Capacitor.getPlatform() !== "android" || /cancel/i.test(msg)) throw e;
+      res = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true, useCredentialManager: false });
+    }
     const cred = GoogleAuthProvider.credential(res.credential && res.credential.idToken, res.credential && res.credential.accessToken);
     return signInWithCredential(auth, cred);
   }
