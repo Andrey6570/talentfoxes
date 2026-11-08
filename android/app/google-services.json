@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "1015672797088-rbk0jbnc6mjbc27i12aorspihqsdu8ke.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.andrey.talantfoxes",
+            "certificate_hash": "816755410a5804fc1ef369e29417e4f081f20a97"
+          }
+        },
+        {
           "client_id": "1015672797088-gcfvrle8dn3soqts63v1gp8ui94191ej.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -37,6 +45,13 @@
             {
               "client_id": "1015672797088-gcfvrle8dn3soqts63v1gp8ui94191ej.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "1015672797088-00t5k962ua9qh57ipmte7lp2ls929jo1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.andrey.talantfoxes"
+              }
             }
           ]
         }
