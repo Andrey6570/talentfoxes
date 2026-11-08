@@ -47,7 +47,9 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          if [ -f app/talentfoxes.jks ]; then ./gradlew assembleRelease --no-daemon; else ./gradlew assembleDebug --no-daemon; fi
+          # the Gradle download from services.gradle.org sometimes times out, so a failed attempt is repeated
+          if [ -f app/talentfoxes.jks ]; then TASK=assembleRelease; else TASK=assembleDebug; fi
+          for i in 1 2 3; do ./gradlew $TASK --no-daemon && break; echo "attempt $i failed"; [ $i = 3 ] && exit 1; sleep 20; done
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
